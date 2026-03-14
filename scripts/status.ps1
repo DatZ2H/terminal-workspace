@@ -14,6 +14,9 @@ $checks = @(
     @{ Name = "npm";            Cmd = { npm --version 2>$null } }
     @{ Name = "PSReadLine";     Cmd = { (Get-Module PSReadLine -ErrorAction SilentlyContinue).Version.ToString() } }
     @{ Name = "Terminal-Icons"; Cmd = { (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1).Version.ToString() } }
+    @{ Name = "Scoop";          Cmd = { (scoop --version 2>$null | Select-Object -First 1) -replace 'v','' } }
+    @{ Name = "zoxide";         Cmd = { (zoxide --version 2>$null) -replace 'zoxide ','' } }
+    @{ Name = "ripgrep";        Cmd = { (rg --version 2>$null | Select-Object -First 1) -replace 'ripgrep ','' } }
     @{ Name = "Claude Code";    Cmd = { claude --version 2>$null } }
 )
 

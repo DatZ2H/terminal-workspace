@@ -13,8 +13,8 @@ Everything else is installed by the bootstrap script.
 ## Quick Start
 
 ```powershell
-git clone https://github.com/DatZ2H/terminal-workspace.git
-cd terminal-workspace
+git clone https://github.com/DatZ2H/terminal-workspace.git ~/terminal-workspace
+cd ~/terminal-workspace
 .\bootstrap.ps1
 ```
 
@@ -24,41 +24,42 @@ Restart Windows Terminal after bootstrap completes.
 
 ### Tools (auto-installed)
 
-| Tool | Purpose |
-|------|---------|
-| PowerShell 7 | Shell |
-| Oh My Posh | Prompt themes |
-| Git | Version control |
-| Node.js LTS | JavaScript runtime |
-| Python 3.12 | Python runtime |
-| Terminal-Icons | File/folder icons in terminal |
-| CaskaydiaCove Nerd Font | Icons in prompt |
+| Tool | Install via | Purpose |
+|------|-------------|---------|
+| PowerShell 7 | winget | Modern shell |
+| Oh My Posh | winget | Prompt theming |
+| Git | winget | Version control |
+| Node.js LTS | winget | JavaScript runtime |
+| Python 3.12 | winget | Python runtime |
+| Scoop | script | CLI package manager |
+| zoxide | scoop | Smart directory jumping |
+| ripgrep (rg) | scoop | Fast file content search |
+| Terminal-Icons | PS module | File/folder icons |
+| CaskaydiaCove NF | OMP | Nerd Font for prompt icons |
 
 ### Themes (5 color themes)
 
-| Name | Command | Description |
-|------|---------|-------------|
-| Dracula Pro | `Set-Theme pro` | Softer Dracula, purple-tinted |
-| Dracula | `Set-Theme dracula` | Classic high-contrast |
-| Tokyo Night | `Set-Theme tokyo` | Blue-indigo, calm |
-| Catppuccin Mocha | `Set-Theme mocha` | Warm pastels |
-| Nord | `Set-Theme nord` | Arctic, muted tones |
+| Name | Key | Based on |
+|------|-----|----------|
+| Dracula Pro | `pro` | Softer purple-tinted Dracula |
+| Dracula | `dracula` | Classic high-contrast |
+| Tokyo Night Storm | `tokyo` | Blue-indigo, calm |
+| Catppuccin Mocha | `mocha` | Warm pastels |
+| Nord | `nord` | Arctic, muted tones |
 
 ### Styles (3 visual styles)
 
-| Style | Command | Look |
-|-------|---------|------|
-| mac | `Set-Style mac` | Acrylic blur, wide padding, hidden scrollbar |
-| win | `Set-Style win` | Mica material, standard padding |
-| linux | `Set-Style linux` | Solid background, block cursor, visible scrollbar |
-
-Combine: `Set-Theme tokyo win` or `Set-Theme nord linux`
+| Style | Look |
+|-------|------|
+| `mac` | Acrylic blur 85%, wide padding, hidden scrollbar |
+| `win` | Mica material 95%, standard padding |
+| `linux` | Solid background 100%, block cursor, visible scrollbar |
 
 ## File Structure
 
 ```
 terminal-workspace/
-├── bootstrap.ps1                 # Run once on new machine
+├── bootstrap.ps1                 # One-command setup for new machines
 ├── configs/
 │   ├── profile.ps1               # PowerShell profile (source of truth)
 │   └── terminal-settings.json    # Windows Terminal settings
@@ -69,7 +70,7 @@ terminal-workspace/
 │   ├── pnx-mocha.omp.json
 │   └── pnx-nord.omp.json
 └── scripts/
-    ├── install-tools.ps1         # Install winget packages + PS modules
+    ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
     ├── sync-to-repo.ps1          # Local configs -> repo
@@ -79,84 +80,158 @@ terminal-workspace/
         └── patcher.py            # Vietnamese IME fix for Claude Code
 ```
 
-## Daily Usage
+## Cheatsheet
 
 ### Theme & Style
 
 ```powershell
-Set-Theme                     # Show current theme + available options
-Set-Theme pro mac             # Switch theme + style
-Set-Theme tokyo               # Switch theme only (keep current style)
-Set-Style linux               # Switch style only (keep current theme)
+Set-Theme                         # Show current theme + all options
+Set-Theme pro                     # Switch to Dracula Pro (keep current style)
+Set-Theme tokyo win               # Switch theme + style together
+Set-Theme mocha linux             # Catppuccin Mocha + Linux style
+Set-Style mac                     # Switch style only (keep current theme)
+Set-Style                         # Show current style
+```
+
+### Directory Navigation (zoxide)
+
+```powershell
+z <keyword>                       # Jump to best-matching directory
+z proj                            # Jump to Projects folder (if visited before)
+z sevt                            # Jump to Samsung-SEVT-APM990 folder
+zi                                # Interactive directory picker (fuzzy)
+```
+
+> zoxide learns from your `cd` history. Use `cd` normally for a few days,
+> then `z` becomes increasingly accurate.
+
+### File Search (ripgrep)
+
+```powershell
+rg "keyword" .                    # Search current directory
+rg "ISO 3691" ../Knowledge-Base/  # Search in specific folder
+rg -i "lidar" --type md           # Case-insensitive, only .md files
+rg -l "safety"                    # List filenames only (no content)
+rg "pattern" -C 3                 # Show 3 lines of context around matches
+rg "status.*active" --glob "*.md" # Regex + file filter
 ```
 
 ### Maintenance
 
 ```powershell
-Get-Status                    # Show versions of all tools
-Update-Tools                  # Update OMP, Git, Node.js, modules, font
-update-claude                 # Update Claude Code + apply Vietnamese fix
+Get-Status                        # Show versions of all tools + config paths
+Update-Tools                      # Update everything (winget + scoop + modules)
+update-claude                     # Update Claude Code + apply Vietnamese IME fix
 ```
 
-### Sync Config
+### Sync Between Machines
 
-After changing config on current machine:
 ```powershell
-Sync-Config push              # Copy local configs into repo
+# On current machine — save changes to repo
+Sync-Config push
 cd $env:PNX_TERMINAL_REPO
 git add -A && git commit -m "update: description" && git push
-```
 
-On another machine:
-```powershell
+# On another machine — pull and apply
 cd $env:PNX_TERMINAL_REPO
 git pull
-Sync-Config pull              # Copy repo configs to local (auto-backup)
+Sync-Config pull                  # Auto-backup before overwriting
+
+# Or re-bootstrap (skip tool install)
+.\bootstrap.ps1 -SkipTools
 ```
 
-Or re-run bootstrap:
-```powershell
-.\bootstrap.ps1 -SkipTools    # Skip tool installation, only deploy configs
-```
-
-### Shortcuts
+### Claude Code Shortcuts
 
 | Command | Action |
 |---------|--------|
 | `cc` | Alias for `claude` |
 | `gc-doc` | Open Claude in guide-claude repo |
 | `gs-doc` | Git status in guide-claude repo |
-| `Get-Status` | Show tool versions |
+| `gl-doc` | Git log in guide-claude repo |
+| `gd-doc` | Git diff in guide-claude repo |
+
+### PSReadLine Keybindings
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Menu-complete (cycle through options) |
+| `Up/Down` | Search history matching current input |
+| `Ctrl+D` | Delete char or exit |
+| `Ctrl+Z` | Undo |
+
+### Standalone Scripts
+
+```powershell
+.\scripts\status.ps1              # Tool versions (without loading profile)
+.\scripts\update-tools.ps1        # Update all tools
+.\scripts\update-tools.ps1 -Force # Update without confirmation
+.\scripts\sync-to-repo.ps1        # Push local -> repo
+.\scripts\sync-from-repo.ps1      # Pull repo -> local
+.\scripts\install-fonts.ps1       # Reinstall Nerd Font
+```
+
+## New Machine Setup
+
+1. Install Windows Terminal from Microsoft Store (if not present)
+2. Run the Quick Start commands above
+3. Restart Windows Terminal
+4. Verify: `Get-Status`
+5. Pick your theme: `Set-Theme pro mac`
+
+If PowerShell 7 is not installed yet:
+```powershell
+# Run from Windows PowerShell 5.1 first:
+winget install Microsoft.PowerShell
+# Then open "PowerShell 7" (not Windows PowerShell) and run bootstrap
+```
 
 ## Troubleshooting
 
 **Font icons broken (squares/boxes)**
 ```powershell
-.\scripts\install-fonts.ps1
-# Then restart Windows Terminal
+.\scripts\install-fonts.ps1       # Reinstall font
+# Then: WT Settings -> Profiles -> Defaults -> Font face -> CaskaydiaCove Nerd Font
 ```
 
 **OMP prompt not loading**
 ```powershell
-oh-my-posh version             # Should show version number
-. $PROFILE                     # Reload profile
+oh-my-posh version                # Should show version number
+Test-Path "$env:USERPROFILE\.oh-my-posh\themes\pnx-dracula-pro.omp.json"
+. $PROFILE                        # Reload profile
 ```
 
 **Sync-Config says "Repo not found"**
 ```powershell
-# Check env var
-$env:PNX_TERMINAL_REPO
-# If empty, set it:
-[Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', 'path\to\terminal-workspace', 'User')
+$env:PNX_TERMINAL_REPO            # Should show path to terminal-workspace
+# If empty:
+[Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', "$env:USERPROFILE\terminal-workspace", 'User')
 ```
 
 **Theme not switching (WT not updating)**
-- Make sure Windows Terminal is running (it hot-reloads settings.json)
-- Check that `$WtSettingsPath` in profile points to correct location
+- Windows Terminal must be running (it hot-reloads settings.json)
+- Verify path: `Test-Path $WtSettingsPath`
 
-**Bootstrap on fresh machine without PowerShell 7**
+**zoxide not jumping correctly**
 ```powershell
-# Run from Windows PowerShell 5.1 first:
-winget install Microsoft.PowerShell
-# Then open PowerShell 7 and run bootstrap
+zoxide query --list               # See what directories zoxide knows
+# zoxide needs time to learn — use cd normally first
 ```
+
+**Scoop tools not found after install**
+```powershell
+# Scoop adds to PATH but current session may not see it
+# Restart terminal, or:
+$env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+```
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `~/terminal-workspace` |
+| `PNX_GUIDE_CLAUDE_DIR` | Path to guide-claude repo (optional) | `~/Claude/Cowork/PNX-Vault/Guide Claude` |
+
+## License
+
+Private repository. Personal use only.

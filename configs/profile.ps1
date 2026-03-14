@@ -13,6 +13,11 @@ if (Get-Module -ListAvailable -Name Terminal-Icons) {
     Import-Module Terminal-Icons
 }
 
+# ===== Zoxide =====
+if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+    Invoke-Expression (& { (zoxide init powershell | Out-String) })
+}
+
 # ===== PSReadLine =====
 Set-PSReadLineOption -PredictionSource History
 Set-PSReadLineOption -PredictionViewStyle ListView
@@ -143,6 +148,11 @@ function Update-Tools {
     Write-Host "  module: Terminal-Icons" -ForegroundColor DarkGray
     Update-Module Terminal-Icons -Force -ErrorAction SilentlyContinue
 
+    if (Get-Command scoop -ErrorAction SilentlyContinue) {
+        Write-Host "  scoop: updating all..." -ForegroundColor DarkGray
+        scoop update *
+    }
+
     Write-Host "  font: CaskaydiaCove Nerd Font" -ForegroundColor DarkGray
     oh-my-posh font install CascadiaCode 2>$null
 
@@ -197,6 +207,9 @@ function Get-Status {
         @{ Name = "Python";         Cmd = { (python --version 2>$null) -replace 'Python ','' } }
         @{ Name = "PSReadLine";     Cmd = { (Get-Module PSReadLine -ErrorAction SilentlyContinue).Version.ToString() } }
         @{ Name = "Terminal-Icons"; Cmd = { (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1).Version.ToString() } }
+        @{ Name = "Scoop";          Cmd = { (scoop --version 2>$null | Select-Object -First 1) -replace 'v','' } }
+        @{ Name = "zoxide";         Cmd = { (zoxide --version 2>$null) -replace 'zoxide ','' } }
+        @{ Name = "ripgrep";        Cmd = { (rg --version 2>$null | Select-Object -First 1) -replace 'ripgrep ','' } }
         @{ Name = "Claude Code";    Cmd = { claude --version 2>$null } }
     )
 

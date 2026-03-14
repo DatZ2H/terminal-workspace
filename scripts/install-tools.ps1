@@ -28,6 +28,32 @@ foreach ($tool in $tools) {
     }
 }
 
+# Scoop + CLI Tools
+Write-Host "`n  Scoop CLI Tools" -ForegroundColor Cyan
+Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
+
+if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+    Write-Host "  Scoop... " -NoNewline
+    Write-Host "installing..." -ForegroundColor Yellow
+    Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+    Write-Host "    done" -ForegroundColor Green
+} else {
+    Write-Host "  Scoop... installed" -ForegroundColor Green
+}
+
+$scoopTools = @("zoxide", "ripgrep")
+foreach ($st in $scoopTools) {
+    Write-Host "  $st... " -NoNewline
+    $installed = scoop list $st 2>$null | Out-String
+    if ($installed -match $st) {
+        Write-Host "installed" -ForegroundColor Green
+    } else {
+        Write-Host "installing..." -ForegroundColor Yellow
+        scoop install $st
+        Write-Host "    done" -ForegroundColor Green
+    }
+}
+
 # PowerShell Modules
 Write-Host "`n  PowerShell Modules" -ForegroundColor Cyan
 Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray

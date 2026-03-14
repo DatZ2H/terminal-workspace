@@ -9,6 +9,7 @@ Write-Host ""
 Write-Host "  This will update:"
 Write-Host "    - Oh My Posh, Git, Node.js, Python (via winget)"
 Write-Host "    - Terminal-Icons module"
+Write-Host "    - Scoop tools (zoxide, ripgrep)"
 Write-Host "    - CaskaydiaCove Nerd Font"
 Write-Host ""
 
@@ -40,6 +41,12 @@ foreach ($pkg in $packages) {
 Write-Host "`n  Updating Terminal-Icons module..." -ForegroundColor Cyan
 Update-Module Terminal-Icons -Force -ErrorAction SilentlyContinue
 Write-Host "    done" -ForegroundColor Green
+
+if (Get-Command scoop -ErrorAction SilentlyContinue) {
+    Write-Host "`n  Updating Scoop tools..." -ForegroundColor Cyan
+    scoop update *
+    Write-Host "    done" -ForegroundColor Green
+}
 
 Write-Host "`n  Updating Nerd Font..." -ForegroundColor Cyan
 oh-my-posh font install CascadiaCode 2>$null
