@@ -115,7 +115,7 @@ if ($SkipTools) {
 } else {
     Write-Step "Installing tools..."
     & "$RepoRoot\scripts\install-tools.ps1"
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+    if ($LASTEXITCODE -ne 0) {
         Write-Skip "install-tools.ps1 exited with code $LASTEXITCODE -- continuing"
     }
 }

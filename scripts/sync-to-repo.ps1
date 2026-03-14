@@ -47,9 +47,8 @@ if ($WtSettingsLocal) {
         $wtJson | ConvertTo-Json -Depth 20 | Set-Content "$RepoRoot\configs\terminal-settings.json" -Encoding utf8NoBOM
         Write-Host "  WT Settings      OK" -ForegroundColor Green
     } catch {
-        # Fallback to raw copy if JSON parse fails
-        Copy-Item $WtSettingsLocal "$RepoRoot\configs\terminal-settings.json" -Force
-        Write-Host "  WT Settings      OK (raw copy — sanitize failed)" -ForegroundColor Yellow
+        Write-Host "  WT Settings      FAILED (JSON parse error -- skipped to avoid exposing secrets)" -ForegroundColor Red
+        Write-Host "                   Fix settings.json manually or run: Sync-Config push" -ForegroundColor DarkGray
     }
 } else {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red

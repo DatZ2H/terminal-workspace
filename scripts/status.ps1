@@ -82,5 +82,5 @@ if ($fi.FontFace -and $wtSettingsPath -and (Test-Path $wtSettingsPath)) {
 # Theme count
 $themeDir = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 $themeCount = (Get-ChildItem $themeDir -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue).Count
-Write-Host "`n  PNX Themes:      $themeCount installed" -ForegroundColor $(if ($themeCount -ge 5) { "Green" } else { "Yellow" })
+Write-Host "`n  PNX Themes:      $themeCount installed" -ForegroundColor $(if ($themeCount -gt 0) { "Green" } else { "Yellow" })
 Write-Host ""

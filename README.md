@@ -228,8 +228,10 @@ cd $env:PNX_TERMINAL_REPO
 git pull
 Sync-Config pull                  # Auto-backup before overwriting (keeps last 3)
 
-# Or re-bootstrap (skip tool install)
+# Or re-bootstrap (skip tool install — works from any shell)
 .\bootstrap.bat -SkipTools
+# If already in PowerShell 7, can run directly:
+.\bootstrap.ps1 -SkipTools
 ```
 
 ### Standalone Scripts

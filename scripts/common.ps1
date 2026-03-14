@@ -13,6 +13,7 @@ function Get-WtSettingsPath {
         [ValidateSet('file', 'deploy')]
         [string]$Mode = 'file'
     )
+    if (-not $env:LOCALAPPDATA) { return $null }
     $candidates = @(
         (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
         (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
