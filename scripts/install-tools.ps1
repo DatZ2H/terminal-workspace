@@ -44,10 +44,11 @@ if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
         $scoopInstaller = Invoke-RestMethod -Uri https://get.scoop.sh
         # Verify content is the real Scoop installer (integrity check)
         if ($scoopInstaller -match 'github\.com/ScoopInstaller' -and $scoopInstaller -match 'function\s+Install-Scoop') {
+            $scoopBlock = [scriptblock]::Create($scoopInstaller)
             if ($isAdmin) {
-                Invoke-Expression "& { $scoopInstaller } -RunAsAdmin"
+                & $scoopBlock -RunAsAdmin
             } else {
-                Invoke-Expression $scoopInstaller
+                & $scoopBlock
             }
         } else {
             throw "Downloaded content failed integrity check -- may not be the official Scoop installer"

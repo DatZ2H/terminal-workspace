@@ -97,12 +97,16 @@ if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
 if (Get-Module -ListAvailable -Name Terminal-Icons) {
     Import-Module Terminal-Icons
 } else {
-    # Try auto-install silently
+    # Try auto-install silently (ensure NuGet provider + PSGallery trust first)
     try {
+        # Pre-install NuGet provider to avoid interactive prompt that blocks terminal startup
+        if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
+        }
         Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
         Import-Module Terminal-Icons
     } catch {
-        $_healthIssues += "Terminal-Icons missing (ls has no icons) — run:  Install-Module Terminal-Icons -Force"
+        $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
     }
 }
 
@@ -379,11 +383,14 @@ function Update-Workspace {
     } finally {
         Set-Location $prevDir
     }
-    $hasChanges = $pullOutput -notmatch 'Already up to date'
-    if ($hasChanges) {
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  git pull failed (exit $LASTEXITCODE). Check network or credentials." -ForegroundColor Red
         Write-Host $pullOutput.Trim() -ForegroundColor DarkGray
-    } else {
+        return
+    } elseif ($pullOutput -match 'Already up to date') {
         Write-Host "  Already up to date." -ForegroundColor DarkGray
+    } else {
+        Write-Host $pullOutput.Trim() -ForegroundColor DarkGray
     }
 
     # 2. Re-deploy configs (always — user may want to re-apply even without new commits)

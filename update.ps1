@@ -16,7 +16,12 @@ try {
 } finally {
     Set-Location $prevDir
 }
-if ($pullOutput -match 'Already up to date') {
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  git pull failed (exit $LASTEXITCODE). Check network or credentials." -ForegroundColor Red
+    Write-Host $pullOutput.Trim() -ForegroundColor DarkGray
+    Write-Host ""
+    exit 1
+} elseif ($pullOutput -match 'Already up to date') {
     Write-Host "  Already up to date." -ForegroundColor DarkGray
 } else {
     Write-Host $pullOutput.Trim() -ForegroundColor DarkGray

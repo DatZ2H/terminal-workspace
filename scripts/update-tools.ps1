@@ -50,7 +50,7 @@ try {
 
 if (Get-Command scoop -ErrorAction SilentlyContinue) {
     Write-Host "`n  Updating Scoop tools..." -ForegroundColor Cyan
-    scoop update *
+    scoop update '*'
     if ($LASTEXITCODE -eq 0) {
         Write-Host "    done" -ForegroundColor Green
     } else {
