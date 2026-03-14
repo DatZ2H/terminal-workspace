@@ -1,4 +1,4 @@
-# Terminal Workspace Bootstrap — Setup everything in one run
+# Terminal Workspace Bootstrap -- Setup everything in one run
 # Usage: git clone <repo> && cd terminal-workspace && .\bootstrap.ps1
 
 param([switch]$SkipTools)
@@ -14,7 +14,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
         exit 1
     }
 
-    # Case 1: pwsh already installed — re-launch automatically
+    # Case 1: pwsh already installed -- re-launch automatically
     $pwshPath = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
     if ($pwshPath) {
         Write-Host ""
@@ -27,7 +27,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
         exit $LASTEXITCODE
     }
 
-    # Case 2: pwsh not found — try installing via winget
+    # Case 2: pwsh not found -- try installing via winget
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host ""
         Write-Host "  PowerShell 7+ required. Installing automatically..." -ForegroundColor Yellow
@@ -53,10 +53,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
         exit 1
     }
 
-    # Case 3: No winget — manual instructions only
+    # Case 3: No winget -- manual instructions only
     Write-Host ""
     Write-Host "  PowerShell 7+ required." -ForegroundColor Red
-    Write-Host "  winget not available — install PowerShell 7 manually:" -ForegroundColor Yellow
+    Write-Host "  winget not available -- install PowerShell 7 manually:" -ForegroundColor Yellow
     Write-Host "    https://aka.ms/powershell-release?tag=stable" -ForegroundColor Cyan
     Write-Host "  Then open 'PowerShell 7' (not Windows PowerShell) and re-run." -ForegroundColor Yellow
     Write-Host ""
@@ -79,11 +79,11 @@ function Write-Ok($msg)   { Write-Host "   $msg" -ForegroundColor Green }
 function Write-Skip($msg) { Write-Host "   $msg" -ForegroundColor Yellow }
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║   Terminal Workspace — Bootstrap     ║" -ForegroundColor Cyan
-Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  ========================================" -ForegroundColor Cyan
+Write-Host "    Terminal Workspace -- Bootstrap      " -ForegroundColor Cyan
+Write-Host "  ========================================" -ForegroundColor Cyan
 
-# ── Step 0: Ensure ExecutionPolicy allows scripts ──
+# -- Step 0: Ensure ExecutionPolicy allows scripts --
 $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
 if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
     Write-Step "Setting ExecutionPolicy to RemoteSigned (CurrentUser)..."
@@ -92,33 +92,33 @@ if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
         Write-Ok "ExecutionPolicy set to RemoteSigned"
     } catch {
         Write-Skip "Could not set ExecutionPolicy: $($_.Exception.Message)"
-        Write-Skip "Profile may not load — run manually: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+        Write-Skip "Profile may not load -- run manually: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
     }
 } else {
     Write-Step "ExecutionPolicy: $currentPolicy (OK)"
 }
 
-# ── Step 1: Install tools ──
+# -- Step 1: Install tools --
 if ($SkipTools) {
     Write-Step "Skipping tools installation (-SkipTools)"
 } else {
     Write-Step "Installing tools..."
     & "$RepoRoot\scripts\install-tools.ps1"
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        Write-Skip "install-tools.ps1 exited with code $LASTEXITCODE — continuing"
+        Write-Skip "install-tools.ps1 exited with code $LASTEXITCODE -- continuing"
     }
 }
 
-# ── Step 2: Install fonts ──
+# -- Step 2: Install fonts --
 # Refresh PATH so oh-my-posh (installed in step 1) is found
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 Write-Step "Installing fonts..."
 & "$RepoRoot\scripts\install-fonts.ps1"
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-    Write-Skip "install-fonts.ps1 exited with code $LASTEXITCODE — continuing"
+    Write-Skip "install-fonts.ps1 exited with code $LASTEXITCODE -- continuing"
 }
 
-# ── Step 3: Deploy OMP themes (before profile, so OMP init can find them) ──
+# -- Step 3: Deploy OMP themes (before profile, so OMP init can find them) --
 Write-Step "Deploying OMP themes..."
 if (-not (Test-Path $OmpThemesLocal)) {
     New-Item -ItemType Directory -Path $OmpThemesLocal -Force | Out-Null
@@ -131,7 +131,7 @@ if ($themeFiles) {
     Write-Skip "No theme files found in $RepoRoot\themes"
 }
 
-# ── Step 4: Deploy Windows Terminal settings ──
+# -- Step 4: Deploy Windows Terminal settings --
 Write-Step "Deploying Windows Terminal settings..."
 if ($WtSettingsLocal) {
     if (Test-Path $WtSettingsLocal) {
@@ -151,7 +151,7 @@ if ($WtSettingsLocal) {
         if ($wtJson.profiles.defaults) {
             $d = $wtJson.profiles.defaults
             $needsWrite = $false
-            # Ensure pnx markers exist (only add if missing — preserve repo's theme/style choice)
+            # Ensure pnx markers exist (only add if missing -- preserve theme/style choice)
             if (-not $d.PSObject.Properties['pnxTheme']) {
                 $d | Add-Member -NotePropertyName pnxTheme -NotePropertyValue 'pro'
                 $needsWrite = $true
@@ -180,7 +180,7 @@ if ($WtSettingsLocal) {
     Write-Skip "Windows Terminal not found (install from Microsoft Store or winget)"
 }
 
-# ── Step 5: Deploy PowerShell profile ──
+# -- Step 5: Deploy PowerShell profile --
 Write-Step "Deploying PowerShell profile..."
 $profileDir = Split-Path $PsProfileLocal -Parent
 if (-not (Test-Path $profileDir)) {
@@ -196,17 +196,17 @@ if (Test-Path $PsProfileLocal) {
 Copy-Item "$RepoRoot\configs\profile.ps1" $PsProfileLocal -Force
 Write-Ok "Profile deployed"
 
-# ── Step 6: Set environment variable ──
+# -- Step 6: Set environment variable --
 Write-Step "Setting PNX_TERMINAL_REPO environment variable..."
 [Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', $RepoRoot, 'User')
 $env:PNX_TERMINAL_REPO = $RepoRoot
 Write-Ok "PNX_TERMINAL_REPO = $RepoRoot"
 
-# ── Summary ──
+# -- Summary --
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║       Bootstrap Complete!             ║" -ForegroundColor Green
-Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  ========================================" -ForegroundColor Green
+Write-Host "         Bootstrap Complete!              " -ForegroundColor Green
+Write-Host "  ========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Next steps:" -ForegroundColor Yellow
 Write-Host "    1. Restart Windows Terminal"

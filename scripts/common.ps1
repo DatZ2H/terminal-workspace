@@ -1,13 +1,13 @@
-# Shared constants and helpers — single source of truth
+# Shared constants and helpers -- single source of truth
 # Dot-source this from any script that needs WT path or version constants.
 
-# ── Version Constants ──
+# -- Version Constants --
 $PythonVersion = "3.12"
 
-# ── WT Settings Path Detection (Store + non-Store) ──
+# -- WT Settings Path Detection (Store + non-Store) --
 # Two modes:
-#   "file"   — returns path only if the file exists (for reading/reporting)
-#   "deploy" — returns path if the parent dir exists (for writing — file may not exist yet)
+#   "file"   -- returns path only if the file exists (for reading/reporting)
+#   "deploy" -- returns path if the parent dir exists (for writing -- file may not exist yet)
 function Get-WtSettingsPath {
     param(
         [ValidateSet('file', 'deploy')]
@@ -24,7 +24,7 @@ function Get-WtSettingsPath {
     }
 }
 
-# ── Nerd Font Detection ──
+# -- Nerd Font Detection --
 # Returns object: Installed, HasV3, HasV2, FontFace
 function Get-NerdFontInfo {
     $entries = @()
@@ -42,7 +42,7 @@ function Get-NerdFontInfo {
     }
 }
 
-# ── WT Font Face Repair ──
+# -- WT Font Face Repair --
 # Fixes stale font name in WT settings.json (v2 <-> v3) via JSON parse. Returns $true if changed.
 function Repair-WtFontFace {
     param([string]$WtPath)
