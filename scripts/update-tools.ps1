@@ -7,7 +7,7 @@ Write-Host "`n  Terminal Workspace — Update Tools" -ForegroundColor Cyan
 Write-Host "  ════════════════════════════════════" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  This will update:"
-Write-Host "    - Oh My Posh, Git, Node.js (via winget)"
+Write-Host "    - Oh My Posh, Git, Node.js, Python (via winget)"
 Write-Host "    - Terminal-Icons module"
 Write-Host "    - CaskaydiaCove Nerd Font"
 Write-Host ""
@@ -24,6 +24,7 @@ $packages = @(
     @{ Id = "JanDeDobbeleer.OhMyPosh"; Name = "Oh My Posh" }
     @{ Id = "Git.Git";                 Name = "Git" }
     @{ Id = "OpenJS.NodeJS.LTS";       Name = "Node.js" }
+    @{ Id = "Python.Python.3.12";      Name = "Python" }
 )
 
 foreach ($pkg in $packages) {
