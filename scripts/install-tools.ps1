@@ -39,13 +39,18 @@ Write-Host "  ──────────────────────
 if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
     Write-Host "  Scoop... " -NoNewline
     Write-Host "installing..." -ForegroundColor Yellow
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     try {
         $scoopInstaller = Invoke-RestMethod -Uri https://get.scoop.sh
         # Verify content is the real Scoop installer (integrity check)
         if ($scoopInstaller -match 'github\.com/ScoopInstaller' -and $scoopInstaller -match 'function\s+Install-Scoop') {
-            Invoke-Expression $scoopInstaller
+            if ($isAdmin) {
+                Invoke-Expression "& { $scoopInstaller } -RunAsAdmin"
+            } else {
+                Invoke-Expression $scoopInstaller
+            }
         } else {
-            throw "Downloaded content failed integrity check — may not be the official Scoop installer"
+            throw "Downloaded content failed integrity check -- may not be the official Scoop installer"
         }
         Write-Host "    done" -ForegroundColor Green
     } catch {

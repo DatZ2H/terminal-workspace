@@ -86,13 +86,24 @@ Write-Host "  ========================================" -ForegroundColor Cyan
 # -- Step 0: Ensure ExecutionPolicy allows scripts --
 $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
 if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
-    Write-Step "Setting ExecutionPolicy to RemoteSigned (CurrentUser)..."
+    Write-Step "Setting ExecutionPolicy to RemoteSigned..."
+    $policySet = $false
+    # Try CurrentUser scope first (persists across sessions)
     try {
-        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-        Write-Ok "ExecutionPolicy set to RemoteSigned"
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction Stop
+        Write-Ok "ExecutionPolicy set to RemoteSigned (CurrentUser)"
+        $policySet = $true
     } catch {
-        Write-Skip "Could not set ExecutionPolicy: $($_.Exception.Message)"
-        Write-Skip "Profile may not load -- run manually: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+        # CurrentUser may fail if Group Policy restricts it -- try Process scope (current session only)
+        try {
+            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force -ErrorAction Stop
+            Write-Ok "ExecutionPolicy set to RemoteSigned (Process -- this session only)"
+            Write-Skip "For permanent fix, run in non-admin terminal: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+            $policySet = $true
+        } catch {
+            Write-Skip "Could not set ExecutionPolicy: $($_.Exception.Message)"
+            Write-Skip "Run manually: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+        }
     }
 } else {
     Write-Step "ExecutionPolicy: $currentPolicy (OK)"
