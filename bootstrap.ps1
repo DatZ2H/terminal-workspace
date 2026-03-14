@@ -95,6 +95,8 @@ if ($SkipTools) {
 }
 
 # ── Step 2: Install fonts ──
+# Refresh PATH so oh-my-posh (installed in step 1) is found
+$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 Write-Step "Installing fonts..."
 & "$RepoRoot\scripts\install-fonts.ps1"
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
@@ -125,7 +127,7 @@ if ($WtSettingsLocal) {
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
-    # Ensure pnx markers exist (only add if missing — preserve repo's theme/style choice)
+    # Post-deploy: inject pnx markers + fix font name for installed version
     try {
         $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
         if ($wtJson.profiles -and -not $wtJson.profiles.defaults) {
@@ -134,6 +136,7 @@ if ($WtSettingsLocal) {
         if ($wtJson.profiles.defaults) {
             $d = $wtJson.profiles.defaults
             $needsWrite = $false
+            # Ensure pnx markers exist (only add if missing — preserve repo's theme/style choice)
             if (-not $d.PSObject.Properties['pnxTheme']) {
                 $d | Add-Member -NotePropertyName pnxTheme -NotePropertyValue 'pro'
                 $needsWrite = $true
@@ -141,6 +144,14 @@ if ($WtSettingsLocal) {
             if (-not $d.PSObject.Properties['pnxStyle']) {
                 $d | Add-Member -NotePropertyName pnxStyle -NotePropertyValue 'mac'
                 $needsWrite = $true
+            }
+            # Detect installed Nerd Font version and fix font face name
+            if ($d.font -and $d.font.face) {
+                $fi = Get-NerdFontInfo
+                if ($fi.FontFace -and $d.font.face -ne $fi.FontFace) {
+                    $d.font.face = $fi.FontFace
+                    $needsWrite = $true
+                }
             }
             if ($needsWrite) {
                 $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM

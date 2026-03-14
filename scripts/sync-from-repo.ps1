@@ -44,6 +44,8 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item $repoWt $WtSettingsLocal -Force
+    # Fix font face name for installed Nerd Font version (v2 vs v3)
+    try { Repair-WtFontFace -WtPath $WtSettingsLocal | Out-Null } catch {}
     Write-Host "  WT Settings      OK" -ForegroundColor Green
 } elseif (-not $WtSettingsLocal) {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red

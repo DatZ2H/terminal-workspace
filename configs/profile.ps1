@@ -105,11 +105,25 @@ if (Get-Module -ListAvailable -Name Terminal-Icons) {
 }
 
 # ===== Nerd Font check (verify CaskaydiaCove is available) =====
-$_fontInstalled = [System.Drawing.Text.InstalledFontCollection]::new().Families.Name -contains 'CaskaydiaCove Nerd Font'
-if (-not $_fontInstalled) {
-    $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
+$_fontInfo = if (Get-Command Get-NerdFontInfo -ErrorAction SilentlyContinue) { Get-NerdFontInfo } else { $null }
+if (-not $_fontInfo -or -not $_fontInfo.Installed) {
+    # Auto-install if oh-my-posh is available
+    if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+        try {
+            oh-my-posh font install CascadiaCode *>$null
+            if ($LASTEXITCODE -eq 0) { $_fontInfo = @{ Installed = $true } }
+        } catch {}
+    }
+    if (-not $_fontInfo -or -not $_fontInfo.Installed) {
+        $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
+    }
 }
-Remove-Variable _fontInstalled -ErrorAction SilentlyContinue
+Remove-Variable _fontInfo -ErrorAction SilentlyContinue
+
+# ===== Auto-fix WT font face if using stale v2/v3 name =====
+if (Get-Command Repair-WtFontFace -ErrorAction SilentlyContinue) {
+    try { Repair-WtFontFace -WtPath $WtSettingsPath | Out-Null } catch {}
+}
 
 # ===== Zoxide =====
 if (Get-Command zoxide -ErrorAction SilentlyContinue) {

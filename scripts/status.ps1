@@ -52,6 +52,32 @@ foreach ($p in $paths) {
     Write-Host $p.Path -ForegroundColor DarkGray
 }
 
+# Nerd Font check
+Write-Host "`n  Nerd Font" -ForegroundColor Cyan
+Write-Host "  ────────────────────────────────────" -ForegroundColor DarkGray
+$fi = Get-NerdFontInfo
+if ($fi.Installed) {
+    $_ver = if ($fi.HasV3) { "v3 ($($fi.FontFace))" } else { "v2 ($($fi.FontFace))" }
+    Write-Host ("  {0,-18}" -f "CaskaydiaCove") -NoNewline
+    Write-Host $_ver -ForegroundColor Green
+} else {
+    Write-Host ("  {0,-18}" -f "CaskaydiaCove") -NoNewline
+    Write-Host "NOT INSTALLED — run: oh-my-posh font install CascadiaCode" -ForegroundColor Red
+}
+# Check WT font face matches installed version
+if ($fi.FontFace -and $wtSettingsPath -and (Test-Path $wtSettingsPath)) {
+    $_wtRaw = Get-Content $wtSettingsPath -Raw
+    # Extract current font face from JSON
+    $_currentFace = if ($_wtRaw -match '"face"\s*:\s*"([^"]+)"') { $Matches[1] } else { $null }
+    if ($_currentFace -and $_currentFace -ne $fi.FontFace) {
+        Write-Host ("  {0,-18}" -f "WT font face") -NoNewline
+        Write-Host "MISMATCH — WT uses '$_currentFace' but '$($fi.FontFace)' is installed" -ForegroundColor Yellow
+    } else {
+        Write-Host ("  {0,-18}" -f "WT font face") -NoNewline
+        Write-Host "OK" -ForegroundColor Green
+    }
+}
+
 # Theme count
 $themeDir = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 $themeCount = (Get-ChildItem $themeDir -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue).Count
