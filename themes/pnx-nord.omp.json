@@ -23,7 +23,7 @@
           "background": "#81A1C1",
           "foreground": "#ECEFF4",
           "powerline_symbol": "\ue0b0",
-          "options": {
+          "properties": {
             "style": "agnoster_short",
             "max_depth": 3
           },
@@ -41,7 +41,7 @@
           ],
           "foreground": "#2E3440",
           "powerline_symbol": "\ue0b0",
-          "options": {
+          "properties": {
             "branch_icon": "\ue725 ",
             "fetch_status": true,
             "fetch_upstream_icon": true
@@ -59,7 +59,7 @@
           "foreground_templates": [
             "{{ if gt .Code 0 }}#2E3440{{ end }}"
           ],
-          "options": {
+          "properties": {
             "always_enabled": true
           },
           "style": "diamond",
@@ -78,7 +78,7 @@
           "style": "plain",
           "template": "\uf253 {{ .FormattedMs }}",
           "type": "executiontime",
-          "options": {
+          "properties": {
             "threshold": 500,
             "style": "austin"
           }
@@ -109,7 +109,7 @@
         },
         {
           "foreground": "#B48EAD",
-          "options": {
+          "properties": {
             "time_format": "15:04:05"
           },
           "style": "plain",
@@ -143,7 +143,7 @@
           "style": "plain",
           "template": "\ue285 ",
           "type": "status",
-          "options": {
+          "properties": {
             "always_enabled": true
           }
         }

@@ -3,7 +3,10 @@ $PnxThemes = "$env:USERPROFILE\.oh-my-posh\themes"
 $Global:PnxCurrentTheme = "pro"
 $Global:PnxCurrentStyle = "mac"
 
-oh-my-posh init pwsh --config "$PnxThemes\pnx-dracula-pro.omp.json" | Invoke-Expression
+$_ompConfig = "$PnxThemes\pnx-dracula-pro.omp.json"
+if ((Get-Command oh-my-posh -ErrorAction SilentlyContinue) -and (Test-Path $_ompConfig)) {
+    oh-my-posh init pwsh --config $_ompConfig | Invoke-Expression
+}
 
 # ===== Terminal Icons =====
 if (Get-Module -ListAvailable -Name Terminal-Icons) {
@@ -109,7 +112,7 @@ function Set-Theme {
         $activeTheme.window.useMica = $s.useMica
     }
 
-    $json | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
+    $json | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsPath -Encoding utf8NoBOM
 
     $Global:PnxCurrentTheme = $Theme
     $Global:PnxCurrentStyle = $Style
@@ -172,6 +175,7 @@ function Sync-Config {
         if (Test-Path $wtLocal)      { Copy-Item $wtLocal "$wtLocal.backup-$ts" }
         Copy-Item "$repo\configs\profile.ps1" $profileLocal -Force
         Copy-Item "$repo\configs\terminal-settings.json" $wtLocal -Force
+        if (-not (Test-Path $themesLocal)) { New-Item -ItemType Directory -Path $themesLocal -Force | Out-Null }
         Copy-Item "$repo\themes\*.omp.json" $themesLocal -Force
         Write-Host "  Pulled repo configs to local. Restart terminal to apply." -ForegroundColor Green
     }
@@ -245,7 +249,7 @@ function update-claude {
         Write-Host "  Patcher not found: $patcher" -ForegroundColor Red
         return
     }
-    $npmRoot = (npm root -g 2>$null)
+    $npmRoot = (npm root -g 2>$null | Out-String).Trim()
     $cliJs = Join-Path $npmRoot "@anthropic-ai\claude-code\cli.js"
     if (-not (Test-Path $cliJs)) {
         Write-Host "  Claude Code cli.js not found at: $cliJs" -ForegroundColor Red

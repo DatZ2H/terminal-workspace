@@ -14,8 +14,8 @@ $tools = @(
 
 foreach ($tool in $tools) {
     Write-Host "  $($tool.Name)... " -NoNewline
-    $check = winget list --id $tool.Id --accept-source-agreements 2>$null
-    if ($LASTEXITCODE -eq 0 -and $check -match [regex]::Escape($tool.Id)) {
+    $check = winget list --id $tool.Id --accept-source-agreements 2>$null | Out-String
+    if ($check -match [regex]::Escape($tool.Id)) {
         Write-Host "installed" -ForegroundColor Green
     } else {
         Write-Host "installing..." -ForegroundColor Yellow
