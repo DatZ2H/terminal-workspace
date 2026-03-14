@@ -51,9 +51,45 @@ Restart Windows Terminal after bootstrap completes.
 
 | Style | Look |
 |-------|------|
-| `mac` | Acrylic blur 85%, wide padding, hidden scrollbar |
+| `mac` | Acrylic blur 85%, wide padding |
 | `win` | Mica material 95%, standard padding |
-| `linux` | Solid background 100%, block cursor, visible scrollbar |
+| `linux` | Solid background 100%, block cursor |
+
+## Configuration
+
+### Windows Terminal Settings
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `scrollbarState` | `visible` | Scrollbar always shown |
+| `historySize` | `50000` | 50K lines scrollback |
+| `bellStyle` | `none` | No beep sounds |
+| `intenseTextStyle` | `bright` | Bold text renders brighter instead of thicker |
+| `adjustIndistinguishableColors` | `indexed` | Auto-fix invisible text (same color as background) |
+| `autoMarkPrompts` | `true` | Mark each command for Ctrl+Up/Down navigation |
+| `newTabPosition` | `afterCurrentTab` | New tab opens next to current tab |
+| `opacity` | `85` | Window transparency (mac style) |
+| `unfocusedAppearance.opacity` | `70` | More transparent when not focused |
+
+### PSReadLine Settings
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `PredictionSource` | `History` | Suggest commands from history |
+| `PredictionViewStyle` | `ListView` | Show suggestions as dropdown list |
+| `EditMode` | `Windows` | Ctrl+C/V/Z work as expected |
+| `BellStyle` | `None` | No beep in PowerShell |
+| `MaximumHistoryCount` | `10000` | Remember 10K commands |
+| `HistoryNoDuplicates` | `true` | Skip duplicate commands when searching |
+| `HistorySearchCursorMovesToEnd` | `true` | Cursor jumps to end when recalling history |
+| `ShowToolTips` | `true` | Show parameter descriptions on Tab |
+
+### Other Profile Settings
+
+| Setting | Effect |
+|---------|--------|
+| Console UTF-8 encoding | Vietnamese characters work correctly in pipes |
+| `Install-Module:Scope = CurrentUser` | No admin prompt when installing modules |
 
 ## File Structure
 
@@ -116,6 +152,33 @@ rg "pattern" -C 3                 # Show 3 lines of context around matches
 rg "status.*active" --glob "*.md" # Regex + file filter
 ```
 
+### Windows Terminal Keybindings
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+Shift+T` | New tab |
+| `Ctrl+Shift+W` | Close tab |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Alt+Shift+D` | Split pane (auto direction) |
+| `Alt+Shift++` | Split pane right |
+| `Alt+Shift+-` | Split pane down |
+| `Ctrl+Shift+F` | Find in terminal |
+| `Ctrl+Shift+P` | Command palette |
+| `Ctrl+Up` | Jump to previous command |
+| `Ctrl+Down` | Jump to next command |
+| `Win+\`` | Quake mode (dropdown terminal) |
+
+### PSReadLine Keybindings
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Menu-complete (cycle through options with tooltips) |
+| `Up/Down` | Search history matching current input |
+| `Ctrl+W` | Delete word backward (erase last word) |
+| `Ctrl+D` | Delete char or exit |
+| `Ctrl+Z` | Undo |
+
 ### Maintenance
 
 ```powershell
@@ -150,15 +213,6 @@ Sync-Config pull                  # Auto-backup before overwriting
 | `gs-doc` | Git status in guide-claude repo |
 | `gl-doc` | Git log in guide-claude repo |
 | `gd-doc` | Git diff in guide-claude repo |
-
-### PSReadLine Keybindings
-
-| Key | Action |
-|-----|--------|
-| `Tab` | Menu-complete (cycle through options) |
-| `Up/Down` | Search history matching current input |
-| `Ctrl+D` | Delete char or exit |
-| `Ctrl+Z` | Undo |
 
 ### Standalone Scripts
 

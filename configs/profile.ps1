@@ -18,16 +18,27 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     Invoke-Expression (& { (zoxide init powershell | Out-String) })
 }
 
+# ===== Encoding (Vietnamese support) =====
+[console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+
 # ===== PSReadLine =====
 Set-PSReadLineOption -PredictionSource History
 Set-PSReadLineOption -PredictionViewStyle ListView
 Set-PSReadLineOption -EditMode Windows
 Set-PSReadLineOption -BellStyle None
+Set-PSReadLineOption -MaximumHistoryCount 10000
+Set-PSReadLineOption -HistoryNoDuplicates:$true
+Set-PSReadLineOption -HistorySearchCursorMovesToEnd:$true
+Set-PSReadLineOption -ShowToolTips:$true
 Set-PSReadLineKeyHandler -Key Ctrl+d -Function DeleteCharOrExit
 Set-PSReadLineKeyHandler -Key Ctrl+z -Function Undo
+Set-PSReadLineKeyHandler -Key Ctrl+w -Function BackwardDeleteWord
 Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
+
+# ===== Default Parameters =====
+$PSDefaultParameterValues['Install-Module:Scope'] = 'CurrentUser'
 
 # ===== Theme & Style Database =====
 $WtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
@@ -41,8 +52,8 @@ $ThemeDB = @{
 }
 
 $StyleDB = @{
-    mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "hidden";  unfocusedOpacity = 70  }
-    win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "hidden";  unfocusedOpacity = 90  }
+    mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 70  }
+    win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 90  }
     linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
 }
 
