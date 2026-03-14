@@ -272,6 +272,25 @@ $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 |----------|---------|---------|
 | `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `~/terminal-workspace` |
 
+## Optional: Claude Code CLI
+
+If you use [Claude Code](https://claude.ai/code), here are some useful additions (not included in this repo — configure manually):
+
+**Status Line** — show model, context usage, cost, and working directory:
+```bash
+# In Claude Code, run:
+/statusline show model name and context percentage with a progress bar, cost and current directory
+```
+This generates a status line script at `~/.claude/statusline.sh` automatically.
+
+**Vietnamese IME Fix** — fix input bug when typing Vietnamese with Telex/VNI:
+```bash
+# See: https://github.com/manhit96/claude-code-vietnamese-fix
+pip install claude-code-vietnamese-fix
+claude-vn-fix
+# Re-run after each Claude Code update
+```
+
 ## License
 
 Private repository. Personal use only.
