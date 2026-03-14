@@ -75,16 +75,41 @@ if ($WtSettingsPath) {
     } catch {}
 }
 
+# ===== Health Check (collect issues, report once at end) =====
+$_healthIssues = @()
+
 # ===== Oh My Posh (init with detected theme) =====
 $_ompConfig = $ThemeDB[$Global:PnxCurrentTheme].omp
-if ((Get-Command oh-my-posh -ErrorAction SilentlyContinue) -and (Test-Path $_ompConfig)) {
+if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
+    $_healthIssues += "Oh My Posh not found — run:  winget install JanDeDobbeleer.OhMyPosh"
+} elseif (-not (Test-Path $_ompConfig)) {
+    $_healthIssues += "OMP theme file missing — run:  Update-Workspace"
+    # Try fallback to any available PNX theme
+    $_fallback = Get-ChildItem $PnxThemes -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($_fallback) { oh-my-posh init pwsh --config $_fallback.FullName | Invoke-Expression }
+} else {
     oh-my-posh init pwsh --config $_ompConfig | Invoke-Expression
 }
 
-# ===== Terminal Icons =====
+# ===== Terminal Icons (auto-install if missing) =====
 if (Get-Module -ListAvailable -Name Terminal-Icons) {
     Import-Module Terminal-Icons
+} else {
+    # Try auto-install silently
+    try {
+        Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
+        Import-Module Terminal-Icons
+    } catch {
+        $_healthIssues += "Terminal-Icons missing (ls has no icons) — run:  Install-Module Terminal-Icons -Force"
+    }
 }
+
+# ===== Nerd Font check (verify CaskaydiaCove is available) =====
+$_fontInstalled = [System.Drawing.Text.InstalledFontCollection]::new().Families.Name -contains 'CaskaydiaCove Nerd Font'
+if (-not $_fontInstalled) {
+    $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
+}
+Remove-Variable _fontInstalled -ErrorAction SilentlyContinue
 
 # ===== Zoxide =====
 if (Get-Command zoxide -ErrorAction SilentlyContinue) {
@@ -95,8 +120,11 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # ===== PSReadLine =====
-Set-PSReadLineOption -PredictionSource History
-Set-PSReadLineOption -PredictionViewStyle ListView
+$_pslVersion = (Get-Module PSReadLine).Version
+if ($_pslVersion -ge [Version]"2.2.0") {
+    Set-PSReadLineOption -PredictionSource History
+    Set-PSReadLineOption -PredictionViewStyle ListView
+}
 Set-PSReadLineOption -EditMode Windows
 Set-PSReadLineOption -BellStyle None
 Set-PSReadLineOption -MaximumHistoryCount 10000
@@ -109,6 +137,18 @@ Set-PSReadLineKeyHandler -Key Ctrl+w -Function BackwardDeleteWord
 Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
+Remove-Variable _pslVersion -ErrorAction SilentlyContinue
+
+# ===== Report health issues (once, non-intrusive) =====
+if ($_healthIssues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  PNX Health:" -ForegroundColor Yellow
+    foreach ($issue in $_healthIssues) {
+        Write-Host "    - $issue" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
+Remove-Variable _healthIssues -ErrorAction SilentlyContinue
 
 # ===== Default Parameters =====
 $PSDefaultParameterValues['Install-Module:Scope'] = 'CurrentUser'
