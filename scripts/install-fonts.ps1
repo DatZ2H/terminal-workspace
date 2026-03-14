@@ -8,7 +8,7 @@ try {
     Get-Command oh-my-posh -ErrorAction Stop | Out-Null
 } catch {
     Write-Host "  Oh My Posh not found. Run install-tools.ps1 first." -ForegroundColor Red
-    return
+    exit 1
 }
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -23,6 +23,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  done" -ForegroundColor Green
 } else {
     Write-Host "  failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    exit 1
 }
 Write-Host ""
 Write-Host "  Restart Windows Terminal for the font to take effect." -ForegroundColor Yellow

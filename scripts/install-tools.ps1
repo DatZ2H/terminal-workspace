@@ -4,8 +4,8 @@
 Write-Host "`n  Installing Tools" -ForegroundColor Cyan
 Write-Host "  ════════════════════════════════" -ForegroundColor DarkGray
 
-# Python version — change here when upgrading (also update in update-tools.ps1)
-$PythonVersion = "3.12"
+. "$PSScriptRoot\common.ps1"
+$script:errorCount = 0
 
 $tools = @(
     @{ Id = "Microsoft.PowerShell";            Name = "PowerShell 7" }
@@ -27,6 +27,7 @@ foreach ($tool in $tools) {
             Write-Host "    done" -ForegroundColor Green
         } else {
             Write-Host "    failed (install manually)" -ForegroundColor Red
+            $script:errorCount++
         }
     }
 }
@@ -39,10 +40,16 @@ if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
     Write-Host "  Scoop... " -NoNewline
     Write-Host "installing..." -ForegroundColor Yellow
     try {
-        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        $scoopInstaller = Invoke-RestMethod -Uri https://get.scoop.sh
+        if ($scoopInstaller -match 'scoop') {
+            & ([scriptblock]::Create($scoopInstaller))
+        } else {
+            throw "Downloaded content does not appear to be the Scoop installer"
+        }
         Write-Host "    done" -ForegroundColor Green
     } catch {
         Write-Host "    failed (install manually: https://scoop.sh)" -ForegroundColor Red
+        $script:errorCount++
     }
 } else {
     Write-Host "  Scoop... installed" -ForegroundColor Green
@@ -62,6 +69,7 @@ if (Get-Command scoop -ErrorAction SilentlyContinue) {
                 Write-Host "    done" -ForegroundColor Green
             } else {
                 Write-Host "    failed (run: scoop install $st)" -ForegroundColor Red
+                $script:errorCount++
             }
         }
     }
@@ -80,9 +88,19 @@ foreach ($mod in $modules) {
         Write-Host "installed" -ForegroundColor Green
     } else {
         Write-Host "installing..." -ForegroundColor Yellow
-        Install-Module $mod -Scope CurrentUser -Force -AllowClobber
-        Write-Host "    done" -ForegroundColor Green
+        try {
+            Install-Module $mod -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+            Write-Host "    done" -ForegroundColor Green
+        } catch {
+            Write-Host "    failed: $($_.Exception.Message)" -ForegroundColor Red
+            $script:errorCount++
+        }
     }
 }
 
-Write-Host "`n  Tools installation complete." -ForegroundColor Green
+if ($script:errorCount -gt 0) {
+    Write-Host "`n  Tools installation finished with $($script:errorCount) error(s)." -ForegroundColor Yellow
+    exit 1
+} else {
+    Write-Host "`n  Tools installation complete." -ForegroundColor Green
+}

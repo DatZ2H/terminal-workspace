@@ -4,9 +4,60 @@
 param([switch]$SkipTools)
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
+    # Guard: script path must be available for re-launch
+    $scriptPath = $MyInvocation.MyCommand.Path
+    if (-not $scriptPath) {
+        Write-Host ""
+        Write-Host "  Cannot auto-relaunch: script path unknown (dot-sourced?)." -ForegroundColor Red
+        Write-Host "  Run directly:  .\bootstrap.ps1" -ForegroundColor Yellow
+        Write-Host ""
+        exit 1
+    }
+
+    # Case 1: pwsh already installed — re-launch automatically
+    $pwshPath = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($pwshPath) {
+        Write-Host ""
+        Write-Host "  Detected PowerShell 7 at: $pwshPath" -ForegroundColor Cyan
+        Write-Host "  Re-launching bootstrap in PowerShell 7..." -ForegroundColor Yellow
+        Write-Host ""
+        $scriptArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath)
+        if ($SkipTools) { $scriptArgs += '-SkipTools' }
+        & $pwshPath @scriptArgs
+        exit $LASTEXITCODE
+    }
+
+    # Case 2: pwsh not found — try installing via winget
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host ""
+        Write-Host "  PowerShell 7+ required. Installing automatically..." -ForegroundColor Yellow
+        Write-Host ""
+        winget install --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --silent
+        if ($LASTEXITCODE -eq 0) {
+            # Refresh PATH to find newly installed pwsh
+            $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+            $pwshPath = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+            if ($pwshPath) {
+                Write-Host "  PowerShell 7 installed. Re-launching bootstrap..." -ForegroundColor Green
+                Write-Host ""
+                $scriptArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath)
+                if ($SkipTools) { $scriptArgs += '-SkipTools' }
+                & $pwshPath @scriptArgs
+                exit $LASTEXITCODE
+            }
+        }
+        Write-Host "  Install failed. Please install manually:" -ForegroundColor Red
+        Write-Host "    winget install Microsoft.PowerShell" -ForegroundColor Yellow
+        Write-Host "  Then open 'PowerShell 7' and re-run." -ForegroundColor Yellow
+        Write-Host ""
+        exit 1
+    }
+
+    # Case 3: No winget — manual instructions only
     Write-Host ""
     Write-Host "  PowerShell 7+ required." -ForegroundColor Red
-    Write-Host "  Run this first:  winget install Microsoft.PowerShell" -ForegroundColor Yellow
+    Write-Host "  winget not available — install PowerShell 7 manually:" -ForegroundColor Yellow
+    Write-Host "    https://aka.ms/powershell-release?tag=stable" -ForegroundColor Cyan
     Write-Host "  Then open 'PowerShell 7' (not Windows PowerShell) and re-run." -ForegroundColor Yellow
     Write-Host ""
     exit 1
@@ -18,12 +69,8 @@ $MaxBackups = 3
 $PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
 $OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 
-# Detect WT settings path (Store + non-Store)
-$_wtPaths = @(
-    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
-    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
-)
-$WtSettingsLocal = $_wtPaths | Where-Object { Test-Path (Split-Path $_ -Parent) } | Select-Object -First 1
+. "$RepoRoot\scripts\common.ps1"
+$WtSettingsLocal = Get-WtSettingsPath -Mode deploy
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -42,20 +89,30 @@ if ($SkipTools) {
 } else {
     Write-Step "Installing tools..."
     & "$RepoRoot\scripts\install-tools.ps1"
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        Write-Skip "install-tools.ps1 exited with code $LASTEXITCODE — continuing"
+    }
 }
 
 # ── Step 2: Install fonts ──
 Write-Step "Installing fonts..."
 & "$RepoRoot\scripts\install-fonts.ps1"
+if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+    Write-Skip "install-fonts.ps1 exited with code $LASTEXITCODE — continuing"
+}
 
 # ── Step 3: Deploy OMP themes (before profile, so OMP init can find them) ──
 Write-Step "Deploying OMP themes..."
 if (-not (Test-Path $OmpThemesLocal)) {
     New-Item -ItemType Directory -Path $OmpThemesLocal -Force | Out-Null
 }
-$themeFiles = Get-ChildItem "$RepoRoot\themes" -Filter "*.omp.json"
-$themeFiles | Copy-Item -Destination $OmpThemesLocal -Force
-Write-Ok "$($themeFiles.Count) themes deployed"
+$themeFiles = Get-ChildItem "$RepoRoot\themes" -Filter "*.omp.json" -ErrorAction SilentlyContinue
+if ($themeFiles) {
+    $themeFiles | Copy-Item -Destination $OmpThemesLocal -Force
+    Write-Ok "$($themeFiles.Count) themes deployed"
+} else {
+    Write-Skip "No theme files found in $RepoRoot\themes"
+}
 
 # ── Step 4: Deploy Windows Terminal settings ──
 Write-Step "Deploying Windows Terminal settings..."
@@ -68,6 +125,30 @@ if ($WtSettingsLocal) {
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
+    # Ensure pnx markers exist (only add if missing — preserve repo's theme/style choice)
+    try {
+        $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
+        if ($wtJson.profiles -and -not $wtJson.profiles.defaults) {
+            $wtJson.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([PSCustomObject]@{})
+        }
+        if ($wtJson.profiles.defaults) {
+            $d = $wtJson.profiles.defaults
+            $needsWrite = $false
+            if (-not $d.PSObject.Properties['pnxTheme']) {
+                $d | Add-Member -NotePropertyName pnxTheme -NotePropertyValue 'pro'
+                $needsWrite = $true
+            }
+            if (-not $d.PSObject.Properties['pnxStyle']) {
+                $d | Add-Member -NotePropertyName pnxStyle -NotePropertyValue 'mac'
+                $needsWrite = $true
+            }
+            if ($needsWrite) {
+                $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
+            }
+        }
+    } catch {
+        Write-Skip "Could not inject pnx markers: $_"
+    }
     Write-Ok "WT settings deployed"
 } else {
     Write-Skip "Windows Terminal not found (install from Microsoft Store or winget)"

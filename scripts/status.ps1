@@ -27,13 +27,12 @@ foreach ($c in $checks) {
     Write-Host $ver -ForegroundColor $color
 }
 
-# Config paths — detect WT settings path (Store + non-Store)
-$_wtPaths = @(
-    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
-    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
-)
-$wtSettingsPath = $_wtPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $wtSettingsPath) { $wtSettingsPath = $_wtPaths[0] }
+. "$PSScriptRoot\common.ps1"
+$wtSettingsPath = Get-WtSettingsPath -Mode file
+if (-not $wtSettingsPath) {
+    # Fallback to Store path for display purposes
+    $wtSettingsPath = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+}
 
 Write-Host "`n  Config Locations" -ForegroundColor Cyan
 Write-Host "  ────────────────────────────────────" -ForegroundColor DarkGray

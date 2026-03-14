@@ -21,8 +21,7 @@ if (-not $Force) {
     }
 }
 
-# Python version — change here when upgrading (also update in install-tools.ps1)
-$PythonVersion = "3.12"
+. "$PSScriptRoot\common.ps1"
 
 $packages = @(
     @{ Id = "JanDeDobbeleer.OhMyPosh";         Name = "Oh My Posh" }
@@ -42,13 +41,21 @@ foreach ($pkg in $packages) {
 }
 
 Write-Host "`n  Updating Terminal-Icons module..." -ForegroundColor Cyan
-Update-Module Terminal-Icons -Force -ErrorAction SilentlyContinue
-Write-Host "    done" -ForegroundColor Green
+try {
+    Update-Module Terminal-Icons -Force -ErrorAction Stop
+    Write-Host "    done" -ForegroundColor Green
+} catch {
+    Write-Host "    failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 
 if (Get-Command scoop -ErrorAction SilentlyContinue) {
     Write-Host "`n  Updating Scoop tools..." -ForegroundColor Cyan
     scoop update *
-    Write-Host "    done" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "    done" -ForegroundColor Green
+    } else {
+        Write-Host "    completed with warnings (exit $LASTEXITCODE)" -ForegroundColor Yellow
+    }
 }
 
 Write-Host "`n  Updating Nerd Font..." -ForegroundColor Cyan

@@ -1,20 +1,30 @@
 #Requires -Version 7.0
 # Copy config files from local system to this repo
 
+param([switch]$Force)
+
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 
 $PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
 $OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 
-# Detect WT settings path (Store + non-Store)
-$_wtPaths = @(
-    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
-    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
-)
-$WtSettingsLocal = $_wtPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+. "$PSScriptRoot\common.ps1"
+$WtSettingsLocal = Get-WtSettingsPath -Mode file
 
 Write-Host "`n  Syncing: local -> repo" -ForegroundColor Cyan
 Write-Host "  ════════════════════════════════" -ForegroundColor DarkGray
+
+if (-not $Force) {
+    Write-Host ""
+    Write-Host "  This will overwrite repo files with your local configs." -ForegroundColor Yellow
+    Write-Host "  Changes can be reverted via:  cd $RepoRoot && git checkout ." -ForegroundColor DarkGray
+    Write-Host ""
+    $confirm = Read-Host "  Proceed? (y/N)"
+    if ($confirm -notin @('y', 'Y', 'yes')) {
+        Write-Host "  Cancelled." -ForegroundColor Yellow
+        return
+    }
+}
 
 # Profile
 if (Test-Path $PsProfileLocal) {

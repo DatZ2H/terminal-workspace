@@ -7,12 +7,8 @@ $MaxBackups = 3
 $PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
 $OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 
-# Detect WT settings path (Store + non-Store)
-$_wtPaths = @(
-    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
-    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
-)
-$WtSettingsLocal = $_wtPaths | Where-Object { Test-Path (Split-Path $_ -Parent) } | Select-Object -First 1
+. "$PSScriptRoot\common.ps1"
+$WtSettingsLocal = Get-WtSettingsPath -Mode deploy
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
