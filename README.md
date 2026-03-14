@@ -111,9 +111,7 @@ terminal-workspace/
     ├── update-tools.ps1          # Update all tools
     ├── sync-to-repo.ps1          # Local configs -> repo
     ├── sync-from-repo.ps1        # Repo configs -> local (with backup)
-    ├── status.ps1                # Show all tool versions
-    └── claude-vn-fix/
-        └── patcher.py            # Vietnamese IME fix for Claude Code
+    └── status.ps1                # Show all tool versions
 ```
 
 ## Cheatsheet
@@ -184,7 +182,6 @@ rg "status.*active" --glob "*.md" # Regex + file filter
 ```powershell
 Get-Status                        # Show versions of all tools + config paths
 Update-Tools                      # Update everything (winget + scoop + modules)
-update-claude                     # Update Claude Code + apply Vietnamese IME fix
 ```
 
 ### Sync Between Machines
@@ -203,16 +200,6 @@ Sync-Config pull                  # Auto-backup before overwriting
 # Or re-bootstrap (skip tool install)
 .\bootstrap.ps1 -SkipTools
 ```
-
-### Claude Code Shortcuts
-
-| Command | Action |
-|---------|--------|
-| `cc` | Alias for `claude` |
-| `gc-doc` | Open Claude in guide-claude repo |
-| `gs-doc` | Git status in guide-claude repo |
-| `gl-doc` | Git log in guide-claude repo |
-| `gd-doc` | Git diff in guide-claude repo |
 
 ### Standalone Scripts
 
@@ -284,7 +271,6 @@ $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `~/terminal-workspace` |
-| `PNX_GUIDE_CLAUDE_DIR` | Path to guide-claude repo (optional) | `~/Claude/Cowork/PNX-Vault/Guide Claude` |
 
 ## License
 

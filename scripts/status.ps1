@@ -17,7 +17,6 @@ $checks = @(
     @{ Name = "Scoop";          Cmd = { (scoop --version 2>$null | Select-Object -First 1) -replace 'v','' } }
     @{ Name = "zoxide";         Cmd = { (zoxide --version 2>$null) -replace 'zoxide ','' } }
     @{ Name = "ripgrep";        Cmd = { (rg --version 2>$null | Select-Object -First 1) -replace 'ripgrep ','' } }
-    @{ Name = "Claude Code";    Cmd = { claude --version 2>$null } }
 )
 
 foreach ($c in $checks) {
@@ -36,7 +35,6 @@ $paths = @(
     @{ Name = "PS Profile";  Path = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1") }
     @{ Name = "WT Settings"; Path = (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json") }
     @{ Name = "OMP Themes";  Path = (Join-Path $env:USERPROFILE ".oh-my-posh\themes") }
-    @{ Name = "VN Fix";      Path = (Join-Path $env:USERPROFILE ".claude-vn-fix\patcher.py") }
 )
 
 foreach ($p in $paths) {

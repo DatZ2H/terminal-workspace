@@ -17,7 +17,6 @@ $RepoRoot = $PSScriptRoot
 $PsProfileLocal  = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
 $WtSettingsLocal = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
 $OmpThemesLocal  = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
-$VnFixLocal      = Join-Path $env:USERPROFILE ".claude-vn-fix"
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -78,19 +77,7 @@ if (Test-Path $PsProfileLocal) {
 Copy-Item "$RepoRoot\configs\profile.ps1" $PsProfileLocal -Force
 Write-Ok "Profile deployed"
 
-# ── Step 6: Deploy Vietnamese IME fix ──
-Write-Step "Deploying Vietnamese IME fix..."
-if (Test-Path "$RepoRoot\scripts\claude-vn-fix\patcher.py") {
-    if (-not (Test-Path $VnFixLocal)) {
-        New-Item -ItemType Directory -Path $VnFixLocal -Force | Out-Null
-    }
-    Copy-Item "$RepoRoot\scripts\claude-vn-fix\patcher.py" $VnFixLocal -Force
-    Write-Ok "Patcher deployed to $VnFixLocal"
-} else {
-    Write-Skip "patcher.py not found in repo"
-}
-
-# ── Step 7: Set environment variable ──
+# ── Step 6: Set environment variable ──
 Write-Step "Setting PNX_TERMINAL_REPO environment variable..."
 [Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', $RepoRoot, 'User')
 $env:PNX_TERMINAL_REPO = $RepoRoot

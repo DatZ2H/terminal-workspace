@@ -221,7 +221,6 @@ function Get-Status {
         @{ Name = "Scoop";          Cmd = { (scoop --version 2>$null | Select-Object -First 1) -replace 'v','' } }
         @{ Name = "zoxide";         Cmd = { (zoxide --version 2>$null) -replace 'zoxide ','' } }
         @{ Name = "ripgrep";        Cmd = { (rg --version 2>$null | Select-Object -First 1) -replace 'ripgrep ','' } }
-        @{ Name = "Claude Code";    Cmd = { claude --version 2>$null } }
     )
 
     foreach ($t in $tools) {
@@ -238,7 +237,6 @@ function Get-Status {
         @{ Name = "PS Profile";  Path = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1") }
         @{ Name = "WT Settings"; Path = $WtSettingsPath }
         @{ Name = "OMP Themes";  Path = "$env:USERPROFILE\.oh-my-posh\themes" }
-        @{ Name = "VN Fix";      Path = "$env:USERPROFILE\.claude-vn-fix\patcher.py" }
     )
     foreach ($p in $cfgPaths) {
         $exists = Test-Path $p.Path
@@ -254,36 +252,4 @@ function Get-Status {
     Write-Host "  Style: " -NoNewline
     Write-Host $Global:PnxCurrentStyle -ForegroundColor Green
     Write-Host ""
-}
-
-# ===== Claude Code Shortcuts =====
-$GuideClaudeDir = if ($env:PNX_GUIDE_CLAUDE_DIR) { $env:PNX_GUIDE_CLAUDE_DIR } else { "$env:USERPROFILE\Claude\Cowork\PNX-Vault\Guide Claude" }
-function gc-doc { if (-not (Test-Path $GuideClaudeDir)) { Write-Host "  Path not found: $GuideClaudeDir" -ForegroundColor Red; Write-Host "  Set env var PNX_GUIDE_CLAUDE_DIR" -ForegroundColor Yellow; return }; Set-Location $GuideClaudeDir; claude }
-function gs-doc { if (-not (Test-Path $GuideClaudeDir)) { Write-Host "  Path not found. Set PNX_GUIDE_CLAUDE_DIR" -ForegroundColor Red; return }; Set-Location $GuideClaudeDir; git status }
-function gl-doc { if (-not (Test-Path $GuideClaudeDir)) { Write-Host "  Path not found. Set PNX_GUIDE_CLAUDE_DIR" -ForegroundColor Red; return }; Set-Location $GuideClaudeDir; git log --oneline -10 }
-function gd-doc { if (-not (Test-Path $GuideClaudeDir)) { Write-Host "  Path not found. Set PNX_GUIDE_CLAUDE_DIR" -ForegroundColor Red; return }; Set-Location $GuideClaudeDir; git diff --stat }
-
-Set-Alias cc claude
-
-# ===== Vietnamese IME Fix =====
-function update-claude {
-    npm update -g @anthropic-ai/claude-code
-    $patcher = "$env:USERPROFILE\.claude-vn-fix\patcher.py"
-    if (-not (Test-Path $patcher)) {
-        Write-Host "  Patcher not found: $patcher" -ForegroundColor Red
-        return
-    }
-    $npmRoot = (npm root -g 2>$null | Out-String).Trim()
-    $cliJs = Join-Path $npmRoot "@anthropic-ai\claude-code\cli.js"
-    if (-not (Test-Path $cliJs)) {
-        Write-Host "  Claude Code cli.js not found at: $cliJs" -ForegroundColor Red
-        return
-    }
-    if (Select-String -Path $cliJs -Pattern "Vietnamese IME fix" -Quiet) {
-        Write-Host "  Vietnamese patch already applied."
-    } else {
-        Write-Host "  Applying Vietnamese IME patch..."
-        $env:PYTHONIOENCODING = "utf-8"
-        python $patcher --path $cliJs
-    }
 }
