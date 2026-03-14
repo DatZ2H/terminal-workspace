@@ -6,18 +6,19 @@ Clone, bootstrap, done.
 ## Prerequisites
 
 - Windows 10/11
-- [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) (included in Windows 11)
 - Windows Terminal (Microsoft Store or winget — both supported)
 
-Everything else is installed by the bootstrap script.
+Everything else (including PowerShell 7) is installed automatically by the bootstrap script.
 
 ## Quick Start
 
-```powershell
-git clone https://github.com/DatZ2H/terminal-workspace.git $HOME/terminal-workspace
-cd $HOME/terminal-workspace
-.\bootstrap.ps1
+```cmd
+git clone https://github.com/DatZ2H/terminal-workspace.git %USERPROFILE%\terminal-workspace
+cd %USERPROFILE%\terminal-workspace
+.\bootstrap.bat
 ```
+
+`bootstrap.bat` works from any shell (CMD, PowerShell 5, PowerShell 7). It bypasses ExecutionPolicy restrictions on fresh Windows installs and auto-installs PowerShell 7 if needed.
 
 Restart Windows Terminal after bootstrap completes.
 
@@ -66,7 +67,7 @@ OMP prompt always matches the active WT color scheme.
 | Setting | Value | Effect |
 |---------|-------|--------|
 | `defaultProfile` | PowerShell 7 | PS7 opens by default |
-| `font.face` | `CaskaydiaCove Nerd Font` | Nerd Font for prompt icons |
+| `font.face` | `CaskaydiaCove NF` | Nerd Font for prompt icons (auto-detected v2/v3) |
 | `font.size` | `12` | Default font size |
 | `colorScheme` | `Dracula Pro` | Default color scheme |
 | `scrollbarState` | `visible` | Scrollbar always shown |
@@ -105,13 +106,17 @@ OMP prompt always matches the active WT color scheme.
 | Console UTF-8 encoding | Vietnamese characters work correctly in pipes |
 | `Install-Module:Scope = CurrentUser` | No admin prompt when installing modules |
 | WT path auto-detection | Supports both Store and non-Store WT installs |
-| Theme auto-detection | Reads current theme/style from WT settings.json on profile load |
+| Theme auto-detection | Reads `pnxTheme`/`pnxStyle` markers from WT settings on profile load |
+| Nerd Font auto-repair | Detects v2/v3 font name and updates WT settings if mismatched |
+| Health check on load | Reports config issues (missing font, unreadable WT settings) at startup |
 
 ## File Structure
 
 ```
 terminal-workspace/
-├── bootstrap.ps1                 # One-command setup for new machines
+├── bootstrap.bat                 # Entry point — works from any shell (bypasses ExecutionPolicy)
+├── bootstrap.ps1                 # Full setup logic (called by bootstrap.bat)
+├── update.ps1                    # Standalone updater (git pull + redeploy + reload)
 ├── configs/
 │   ├── profile.ps1               # PowerShell profile (source of truth)
 │   └── terminal-settings.json    # Windows Terminal settings
@@ -122,12 +127,13 @@ terminal-workspace/
 │   ├── pnx-mocha.omp.json
 │   └── pnx-nord.omp.json
 └── scripts/
+    ├── common.ps1                # Shared helpers (WT path detection, font info, constants)
     ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
-    ├── sync-to-repo.ps1          # Local configs -> repo
+    ├── sync-to-repo.ps1          # Local configs -> repo (strips secrets)
     ├── sync-from-repo.ps1        # Repo configs -> local (with backup)
-    └── status.ps1                # Show all tool versions
+    └── status.ps1                # Show all tool versions + config status
 ```
 
 ## Cheatsheet
@@ -142,6 +148,8 @@ Set-Theme mocha linux             # Catppuccin Mocha + Linux style
 Set-Style mac                     # Switch style only (keep current theme)
 Set-Style                         # Show current style
 ```
+
+Tab completion is available for `Set-Theme` and `Set-Style` parameters.
 
 ### Directory Navigation (zoxide)
 
@@ -199,8 +207,9 @@ rg "status.*active" --glob "*.md" # Regex + file filter
 
 ```powershell
 Get-Status                        # Show versions of all tools + config paths
-Update-Tools                      # Update everything (winget + scoop + modules)
+Update-Tools                      # Update everything (winget + scoop + modules + font)
 Update-Tools -Force               # Update without confirmation prompt
+Update-Workspace                  # Git pull + redeploy configs + reload profile
 ```
 
 ### Sync Between Machines
@@ -212,47 +221,58 @@ cd $env:PNX_TERMINAL_REPO
 git add -A && git commit -m "update: description" && git push
 
 # On another machine — pull and apply
+Update-Workspace                  # Easiest: pulls + redeploys + reloads in one step
+
+# Or manually:
 cd $env:PNX_TERMINAL_REPO
 git pull
 Sync-Config pull                  # Auto-backup before overwriting (keeps last 3)
 
 # Or re-bootstrap (skip tool install)
-.\bootstrap.ps1 -SkipTools
+.\bootstrap.bat -SkipTools
 ```
 
 ### Standalone Scripts
 
 ```powershell
+.\update.ps1                      # Git pull + redeploy + reload (no profile needed)
 .\scripts\status.ps1              # Tool versions (without loading profile)
 .\scripts\install-tools.ps1       # Install all tools from scratch
 .\scripts\install-fonts.ps1       # Reinstall Nerd Font
 .\scripts\update-tools.ps1        # Update all tools (interactive)
 .\scripts\update-tools.ps1 -Force # Update without confirmation
-.\scripts\sync-to-repo.ps1        # Push local -> repo
+.\scripts\sync-to-repo.ps1        # Push local -> repo (strips environment secrets)
 .\scripts\sync-from-repo.ps1      # Pull repo -> local (keeps last 3 backups)
 ```
 
 ## New Machine Setup
 
-1. Install Windows Terminal from Microsoft Store or via winget (both supported)
-2. Run the Quick Start commands above
-3. Restart Windows Terminal
-4. Verify: `Get-Status`
-5. Pick your theme: `Set-Theme pro mac`
+1. Install Windows Terminal from Microsoft Store (or `winget install Microsoft.WindowsTerminal`)
+2. Open any terminal (CMD, PowerShell, or Windows Terminal)
+3. Run:
+   ```cmd
+   git clone https://github.com/DatZ2H/terminal-workspace.git %USERPROFILE%\terminal-workspace
+   cd %USERPROFILE%\terminal-workspace
+   .\bootstrap.bat
+   ```
+4. Restart Windows Terminal
+5. Verify: `Get-Status`
+6. Pick your theme: `Set-Theme pro mac`
 
-If PowerShell 7 is not installed yet:
-```powershell
-# Run from Windows PowerShell 5.1 first:
-winget install Microsoft.PowerShell
-# Then open "PowerShell 7" (not Windows PowerShell) and run bootstrap
-```
+> `bootstrap.bat` handles everything automatically: installs PowerShell 7 if missing, sets ExecutionPolicy, installs all tools, deploys configs. No manual steps needed.
 
 ## Troubleshooting
 
-**Font icons broken (squares/boxes)**
+**Font icons broken (squares/boxes instead of icons)**
 ```powershell
-.\scripts\install-fonts.ps1       # Reinstall font
-# Then: WT Settings -> Profiles -> Defaults -> Font face -> CaskaydiaCove Nerd Font
+# Reinstall font
+.\scripts\install-fonts.ps1
+# Restart Windows Terminal — font name is auto-detected (v2 or v3)
+```
+
+If icons are still broken after restart, check the font name matches:
+```powershell
+Get-Status    # Look at the "Nerd Font" section — shows installed version and WT font face match
 ```
 
 **OMP prompt not loading**
@@ -265,13 +285,16 @@ Test-Path "$env:USERPROFILE\.oh-my-posh\themes\pnx-dracula-pro.omp.json"
 **Sync-Config says "Repo not found"**
 ```powershell
 $env:PNX_TERMINAL_REPO            # Should show path to terminal-workspace
-# If empty:
+# If empty, re-run bootstrap or set manually:
 [Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', "$env:USERPROFILE\terminal-workspace", 'User')
 ```
 
 **Theme not switching (WT not updating)**
-- Windows Terminal must be running (it hot-reloads settings.json)
-- Verify path: `Test-Path $WtSettingsPath`
+```powershell
+# Windows Terminal must be running (it hot-reloads settings.json)
+# Verify the settings file exists:
+Get-Status    # Check "WT Settings" row under Config Locations
+```
 
 **zoxide not jumping correctly**
 ```powershell
@@ -286,11 +309,19 @@ zoxide query --list               # See what directories zoxide knows
 $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 ```
 
+**Profile fails to load on fresh Windows (ExecutionPolicy)**
+```cmd
+:: Use bootstrap.bat instead of bootstrap.ps1 — it bypasses ExecutionPolicy automatically
+.\bootstrap.bat
+:: After bootstrap, ExecutionPolicy is set to RemoteSigned permanently
+```
+
 ## Environment Variables
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `$HOME/terminal-workspace` |
+| Variable | Purpose | Set by |
+|----------|---------|--------|
+| `PNX_TERMINAL_REPO` | Path to this repo | bootstrap (auto) |
+| `PNX_OMP_THEMES` | Custom theme directory (optional) | manual |
 
 ## Optional: Claude Code CLI
 

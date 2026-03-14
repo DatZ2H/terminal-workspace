@@ -17,7 +17,7 @@ $tools = @(
 
 foreach ($tool in $tools) {
     Write-Host "  $($tool.Name)... " -NoNewline
-    $check = winget list --id $tool.Id --accept-source-agreements 2>$null | Out-String
+    $check = winget list --id $tool.Id --exact --accept-source-agreements 2>$null | Out-String
     if ($check -match [regex]::Escape($tool.Id)) {
         Write-Host "installed" -ForegroundColor Green
     } else {
@@ -41,14 +41,16 @@ if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
     Write-Host "installing..." -ForegroundColor Yellow
     try {
         $scoopInstaller = Invoke-RestMethod -Uri https://get.scoop.sh
-        if ($scoopInstaller -match 'scoop') {
-            & ([scriptblock]::Create($scoopInstaller))
+        # Verify content is the real Scoop installer (integrity check)
+        if ($scoopInstaller -match 'github\.com/ScoopInstaller' -and $scoopInstaller -match 'function\s+Install-Scoop') {
+            Invoke-Expression $scoopInstaller
         } else {
-            throw "Downloaded content does not appear to be the Scoop installer"
+            throw "Downloaded content failed integrity check — may not be the official Scoop installer"
         }
         Write-Host "    done" -ForegroundColor Green
     } catch {
-        Write-Host "    failed (install manually: https://scoop.sh)" -ForegroundColor Red
+        Write-Host "    failed: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "    install manually: https://scoop.sh" -ForegroundColor DarkGray
         $script:errorCount++
     }
 } else {

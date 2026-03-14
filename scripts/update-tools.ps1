@@ -59,11 +59,15 @@ if (Get-Command scoop -ErrorAction SilentlyContinue) {
 }
 
 Write-Host "`n  Updating Nerd Font..." -ForegroundColor Cyan
-oh-my-posh font install CascadiaCode 2>$null
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "    done" -ForegroundColor Green
+if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+    oh-my-posh font install CascadiaCode 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "    done" -ForegroundColor Green
+    } else {
+        Write-Host "    failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    }
 } else {
-    Write-Host "    failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    Write-Host "    skipped (oh-my-posh not found)" -ForegroundColor Yellow
 }
 
 Write-Host "`n  All updates complete." -ForegroundColor Green

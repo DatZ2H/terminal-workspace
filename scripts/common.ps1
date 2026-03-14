@@ -43,23 +43,19 @@ function Get-NerdFontInfo {
 }
 
 # ── WT Font Face Repair ──
-# Fixes stale font name in WT settings.json (v2 <-> v3). Returns $true if changed.
+# Fixes stale font name in WT settings.json (v2 <-> v3) via JSON parse. Returns $true if changed.
 function Repair-WtFontFace {
     param([string]$WtPath)
     if (-not $WtPath -or -not (Test-Path $WtPath)) { return $false }
     $fi = Get-NerdFontInfo
     if (-not $fi.FontFace) { return $false }
-    $raw = Get-Content $WtPath -Raw
-    $changed = $false
-    if ($fi.HasV3 -and $raw -match 'CaskaydiaCove Nerd Font') {
-        $raw = $raw -replace 'CaskaydiaCove Nerd Font', 'CaskaydiaCove NF'
-        $changed = $true
-    } elseif ($fi.HasV2 -and -not $fi.HasV3 -and $raw -match '"CaskaydiaCove NF"') {
-        $raw = $raw -replace '"CaskaydiaCove NF"', '"CaskaydiaCove Nerd Font"'
-        $changed = $true
-    }
-    if ($changed) {
-        $raw | Set-Content $WtPath -Encoding utf8NoBOM -NoNewline
-    }
-    return $changed
+    try {
+        $json = Get-Content $WtPath -Raw | ConvertFrom-Json
+    } catch { return $false }
+    $d = $json.profiles.defaults
+    if (-not $d -or -not $d.font -or -not $d.font.face) { return $false }
+    if ($d.font.face -eq $fi.FontFace) { return $false }
+    $d.font.face = $fi.FontFace
+    $json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
+    return $true
 }

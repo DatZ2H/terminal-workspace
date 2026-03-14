@@ -83,6 +83,21 @@ Write-Host "  ╔═════════════════════
 Write-Host "  ║   Terminal Workspace — Bootstrap     ║" -ForegroundColor Cyan
 Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Cyan
 
+# ── Step 0: Ensure ExecutionPolicy allows scripts ──
+$currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
+    Write-Step "Setting ExecutionPolicy to RemoteSigned (CurrentUser)..."
+    try {
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        Write-Ok "ExecutionPolicy set to RemoteSigned"
+    } catch {
+        Write-Skip "Could not set ExecutionPolicy: $($_.Exception.Message)"
+        Write-Skip "Profile may not load — run manually: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
+    }
+} else {
+    Write-Step "ExecutionPolicy: $currentPolicy (OK)"
+}
+
 # ── Step 1: Install tools ──
 if ($SkipTools) {
     Write-Step "Skipping tools installation (-SkipTools)"

@@ -10,9 +10,12 @@ Write-Host "  ══════════════════════
 # 1. Git pull
 Write-Host "`n  Pulling latest changes..." -ForegroundColor Cyan
 $prevDir = Get-Location
-Set-Location $RepoRoot
-$pullOutput = git pull 2>&1 | Out-String
-Set-Location $prevDir
+try {
+    Set-Location $RepoRoot
+    $pullOutput = git pull 2>&1 | Out-String
+} finally {
+    Set-Location $prevDir
+}
 if ($pullOutput -match 'Already up to date') {
     Write-Host "  Already up to date." -ForegroundColor DarkGray
 } else {

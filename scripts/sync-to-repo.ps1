@@ -34,12 +34,23 @@ if (Test-Path $PsProfileLocal) {
     Write-Host "  Profile          NOT FOUND: $PsProfileLocal" -ForegroundColor Red
 }
 
-# WT Settings
-# Note: profiles.list contains machine-specific entries (WSL distros, etc.)
-# but hidden profiles are harmless on other machines — WT ignores them.
+# WT Settings (sanitize machine-specific data before copying to repo)
 if ($WtSettingsLocal) {
-    Copy-Item $WtSettingsLocal "$RepoRoot\configs\terminal-settings.json" -Force
-    Write-Host "  WT Settings      OK" -ForegroundColor Green
+    try {
+        $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
+        # Strip environment variables from all profiles (may contain secrets)
+        foreach ($p in $wtJson.profiles.list) {
+            if ($p.PSObject.Properties['environment']) {
+                $p.PSObject.Properties.Remove('environment')
+            }
+        }
+        $wtJson | ConvertTo-Json -Depth 20 | Set-Content "$RepoRoot\configs\terminal-settings.json" -Encoding utf8NoBOM
+        Write-Host "  WT Settings      OK" -ForegroundColor Green
+    } catch {
+        # Fallback to raw copy if JSON parse fails
+        Copy-Item $WtSettingsLocal "$RepoRoot\configs\terminal-settings.json" -Force
+        Write-Host "  WT Settings      OK (raw copy — sanitize failed)" -ForegroundColor Yellow
+    }
 } else {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red
 }

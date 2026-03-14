@@ -66,13 +66,14 @@ if ($fi.Installed) {
 }
 # Check WT font face matches installed version
 if ($fi.FontFace -and $wtSettingsPath -and (Test-Path $wtSettingsPath)) {
-    $_wtRaw = Get-Content $wtSettingsPath -Raw
-    # Extract current font face from JSON
-    $_currentFace = if ($_wtRaw -match '"face"\s*:\s*"([^"]+)"') { $Matches[1] } else { $null }
+    try {
+        $_wtJson = Get-Content $wtSettingsPath -Raw | ConvertFrom-Json
+        $_currentFace = $_wtJson.profiles.defaults.font.face
+    } catch { $_currentFace = $null }
     if ($_currentFace -and $_currentFace -ne $fi.FontFace) {
         Write-Host ("  {0,-18}" -f "WT font face") -NoNewline
         Write-Host "MISMATCH — WT uses '$_currentFace' but '$($fi.FontFace)' is installed" -ForegroundColor Yellow
-    } else {
+    } elseif ($_currentFace) {
         Write-Host ("  {0,-18}" -f "WT font face") -NoNewline
         Write-Host "OK" -ForegroundColor Green
     }

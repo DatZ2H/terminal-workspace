@@ -29,6 +29,9 @@ $StyleDB = @{
     linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
 }
 
+# ===== Health Check (collect issues, report once at end) =====
+$_healthIssues = @()
+
 # ===== Detect Current Theme & Style from WT Settings =====
 $Global:PnxCurrentTheme = "pro"
 $Global:PnxCurrentStyle = "mac"
@@ -72,11 +75,10 @@ if ($WtSettingsPath) {
             }
         }
         Remove-Variable _wtJson, _defaults -ErrorAction SilentlyContinue
-    } catch {}
+    } catch {
+        $_healthIssues += "WT settings.json unreadable — theme/style detection skipped"
+    }
 }
-
-# ===== Health Check (collect issues, report once at end) =====
-$_healthIssues = @()
 
 # ===== Oh My Posh (init with detected theme) =====
 $_ompConfig = $ThemeDB[$Global:PnxCurrentTheme].omp
@@ -134,8 +136,8 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # ===== PSReadLine =====
-$_pslVersion = (Get-Module PSReadLine).Version
-if ($_pslVersion -ge [Version]"2.2.0") {
+$_pslVersion = (Get-Module PSReadLine -ErrorAction SilentlyContinue).Version
+if ($_pslVersion -and $_pslVersion -ge [Version]"2.2.0") {
     Set-PSReadLineOption -PredictionSource History
     Set-PSReadLineOption -PredictionViewStyle ListView
 }
@@ -371,9 +373,12 @@ function Update-Workspace {
     # 1. Git pull
     Write-Host "`n  Pulling latest changes..." -ForegroundColor Cyan
     $prevDir = Get-Location
-    Set-Location $repo
-    $pullOutput = git pull 2>&1 | Out-String
-    Set-Location $prevDir
+    try {
+        Set-Location $repo
+        $pullOutput = git pull 2>&1 | Out-String
+    } finally {
+        Set-Location $prevDir
+    }
     $hasChanges = $pullOutput -notmatch 'Already up to date'
     if ($hasChanges) {
         Write-Host $pullOutput.Trim() -ForegroundColor DarkGray
