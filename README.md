@@ -7,14 +7,15 @@ Clone, bootstrap, done.
 
 - Windows 10/11
 - [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) (included in Windows 11)
+- Windows Terminal (Microsoft Store or winget — both supported)
 
 Everything else is installed by the bootstrap script.
 
 ## Quick Start
 
 ```powershell
-git clone https://github.com/DatZ2H/terminal-workspace.git ~/terminal-workspace
-cd ~/terminal-workspace
+git clone https://github.com/DatZ2H/terminal-workspace.git $HOME/terminal-workspace
+cd $HOME/terminal-workspace
 .\bootstrap.ps1
 ```
 
@@ -47,13 +48,16 @@ Restart Windows Terminal after bootstrap completes.
 | Catppuccin Mocha | `mocha` | Warm pastels |
 | Nord | `nord` | Arctic, muted tones |
 
+Theme is auto-detected from Windows Terminal settings on each session start.
+OMP prompt always matches the active WT color scheme.
+
 ### Styles (3 visual styles)
 
 | Style | Look |
 |-------|------|
-| `mac` | Acrylic blur 85%, wide padding |
-| `win` | Mica material 95%, standard padding |
-| `linux` | Solid background 100%, block cursor |
+| `mac` | Acrylic blur 85%, wide padding, unfocused 70% |
+| `win` | Mica material 95%, standard padding, unfocused 90% |
+| `linux` | Solid background 100%, block cursor, no transparency |
 
 ## Configuration
 
@@ -61,6 +65,10 @@ Restart Windows Terminal after bootstrap completes.
 
 | Setting | Value | Effect |
 |---------|-------|--------|
+| `defaultProfile` | PowerShell 7 | PS7 opens by default |
+| `font.face` | `CaskaydiaCove Nerd Font` | Nerd Font for prompt icons |
+| `font.size` | `12` | Default font size |
+| `colorScheme` | `Dracula Pro` | Default color scheme |
 | `scrollbarState` | `visible` | Scrollbar always shown |
 | `historySize` | `50000` | 50K lines scrollback |
 | `bellStyle` | `none` | No beep sounds |
@@ -68,7 +76,13 @@ Restart Windows Terminal after bootstrap completes.
 | `adjustIndistinguishableColors` | `indexed` | Auto-fix invisible text (same color as background) |
 | `autoMarkPrompts` | `true` | Mark each command for Ctrl+Up/Down navigation |
 | `newTabPosition` | `afterCurrentTab` | New tab opens next to current tab |
-| `opacity` | `85` | Window transparency (mac style) |
+| `copyFormatting` | `none` | Paste plain text only (no colors/fonts) |
+| `copyOnSelect` | `false` | Must explicitly copy (Ctrl+Shift+C) |
+| `initialCols` | `120` | Default window width |
+| `initialRows` | `60` | Default window height |
+| `firstWindowPreference` | `persistedWindowLayout` | Restore previous window size/position |
+| `showTabsFullscreen` | `true` | Show tab bar in fullscreen mode |
+| `opacity` | `85` | Window transparency (mac style default) |
 | `unfocusedAppearance.opacity` | `70` | More transparent when not focused |
 
 ### PSReadLine Settings
@@ -77,7 +91,7 @@ Restart Windows Terminal after bootstrap completes.
 |---------|-------|--------|
 | `PredictionSource` | `History` | Suggest commands from history |
 | `PredictionViewStyle` | `ListView` | Show suggestions as dropdown list |
-| `EditMode` | `Windows` | Ctrl+C/V/Z work as expected |
+| `EditMode` | `Windows` | Ctrl+V/Z work as expected |
 | `BellStyle` | `None` | No beep in PowerShell |
 | `MaximumHistoryCount` | `10000` | Remember 10K commands |
 | `HistoryNoDuplicates` | `true` | Skip duplicate commands when searching |
@@ -90,6 +104,8 @@ Restart Windows Terminal after bootstrap completes.
 |---------|--------|
 | Console UTF-8 encoding | Vietnamese characters work correctly in pipes |
 | `Install-Module:Scope = CurrentUser` | No admin prompt when installing modules |
+| WT path auto-detection | Supports both Store and non-Store WT installs |
+| Theme auto-detection | Reads current theme/style from WT settings.json on profile load |
 
 ## File Structure
 
@@ -161,6 +177,8 @@ rg "status.*active" --glob "*.md" # Regex + file filter
 | `Alt+Shift+D` | Split pane (auto direction) |
 | `Alt+Shift++` | Split pane right |
 | `Alt+Shift+-` | Split pane down |
+| `Ctrl+Shift+C` | Copy (multi-line) |
+| `Ctrl+V` | Paste |
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+Shift+P` | Command palette |
 | `Ctrl+Up` | Jump to previous command |
@@ -182,6 +200,7 @@ rg "status.*active" --glob "*.md" # Regex + file filter
 ```powershell
 Get-Status                        # Show versions of all tools + config paths
 Update-Tools                      # Update everything (winget + scoop + modules)
+Update-Tools -Force               # Update without confirmation prompt
 ```
 
 ### Sync Between Machines
@@ -195,7 +214,7 @@ git add -A && git commit -m "update: description" && git push
 # On another machine — pull and apply
 cd $env:PNX_TERMINAL_REPO
 git pull
-Sync-Config pull                  # Auto-backup before overwriting
+Sync-Config pull                  # Auto-backup before overwriting (keeps last 3)
 
 # Or re-bootstrap (skip tool install)
 .\bootstrap.ps1 -SkipTools
@@ -205,16 +224,17 @@ Sync-Config pull                  # Auto-backup before overwriting
 
 ```powershell
 .\scripts\status.ps1              # Tool versions (without loading profile)
-.\scripts\update-tools.ps1        # Update all tools
+.\scripts\install-tools.ps1       # Install all tools from scratch
+.\scripts\install-fonts.ps1       # Reinstall Nerd Font
+.\scripts\update-tools.ps1        # Update all tools (interactive)
 .\scripts\update-tools.ps1 -Force # Update without confirmation
 .\scripts\sync-to-repo.ps1        # Push local -> repo
-.\scripts\sync-from-repo.ps1      # Pull repo -> local
-.\scripts\install-fonts.ps1       # Reinstall Nerd Font
+.\scripts\sync-from-repo.ps1      # Pull repo -> local (keeps last 3 backups)
 ```
 
 ## New Machine Setup
 
-1. Install Windows Terminal from Microsoft Store (if not present)
+1. Install Windows Terminal from Microsoft Store or via winget (both supported)
 2. Run the Quick Start commands above
 3. Restart Windows Terminal
 4. Verify: `Get-Status`
@@ -270,7 +290,7 @@ $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `~/terminal-workspace` |
+| `PNX_TERMINAL_REPO` | Path to this repo (set by bootstrap) | `$HOME/terminal-workspace` |
 
 ## Optional: Claude Code CLI
 

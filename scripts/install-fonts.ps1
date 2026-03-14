@@ -19,6 +19,10 @@ if (-not $isAdmin) {
 
 Write-Host "  CaskaydiaCove Nerd Font... " -NoNewline
 oh-my-posh font install CascadiaCode
-Write-Host "  done" -ForegroundColor Green
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  done" -ForegroundColor Green
+} else {
+    Write-Host "  failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+}
 Write-Host ""
 Write-Host "  Restart Windows Terminal for the font to take effect." -ForegroundColor Yellow

@@ -21,11 +21,14 @@ if (-not $Force) {
     }
 }
 
+# Python version — change here when upgrading (also update in install-tools.ps1)
+$PythonVersion = "3.12"
+
 $packages = @(
-    @{ Id = "JanDeDobbeleer.OhMyPosh"; Name = "Oh My Posh" }
-    @{ Id = "Git.Git";                 Name = "Git" }
-    @{ Id = "OpenJS.NodeJS.LTS";       Name = "Node.js" }
-    @{ Id = "Python.Python.3.12";      Name = "Python" }
+    @{ Id = "JanDeDobbeleer.OhMyPosh";         Name = "Oh My Posh" }
+    @{ Id = "Git.Git";                         Name = "Git" }
+    @{ Id = "OpenJS.NodeJS.LTS";               Name = "Node.js" }
+    @{ Id = "Python.Python.$PythonVersion";    Name = "Python" }
 )
 
 foreach ($pkg in $packages) {
@@ -50,7 +53,11 @@ if (Get-Command scoop -ErrorAction SilentlyContinue) {
 
 Write-Host "`n  Updating Nerd Font..." -ForegroundColor Cyan
 oh-my-posh font install CascadiaCode 2>$null
-Write-Host "    done" -ForegroundColor Green
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "    done" -ForegroundColor Green
+} else {
+    Write-Host "    failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+}
 
 Write-Host "`n  All updates complete." -ForegroundColor Green
 Write-Host ""

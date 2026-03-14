@@ -2,10 +2,17 @@
 # Copy config files from this repo to local system (with backup)
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
+$MaxBackups = 3
 
-$PsProfileLocal  = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-$WtSettingsLocal = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-$OmpThemesLocal  = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
+$PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
+$OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
+
+# Detect WT settings path (Store + non-Store)
+$_wtPaths = @(
+    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
+    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
+)
+$WtSettingsLocal = $_wtPaths | Where-Object { Test-Path (Split-Path $_ -Parent) } | Select-Object -First 1
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -20,6 +27,9 @@ if (Test-Path $repoProfile) {
     if (Test-Path $PsProfileLocal) {
         Copy-Item $PsProfileLocal "$PsProfileLocal.backup-$timestamp"
         Write-Host "  Profile backup   created" -ForegroundColor DarkGray
+        # Cleanup old backups (keep last N)
+        Get-ChildItem (Split-Path $PsProfileLocal -Parent) -Filter "Microsoft.PowerShell_profile.ps1.backup-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item $repoProfile $PsProfileLocal -Force
     Write-Host "  Profile          OK" -ForegroundColor Green
@@ -29,13 +39,18 @@ if (Test-Path $repoProfile) {
 
 # WT Settings
 $repoWt = "$RepoRoot\configs\terminal-settings.json"
-if (Test-Path $repoWt) {
+if ($WtSettingsLocal -and (Test-Path $repoWt)) {
     if (Test-Path $WtSettingsLocal) {
         Copy-Item $WtSettingsLocal "$WtSettingsLocal.backup-$timestamp"
         Write-Host "  WT backup        created" -ForegroundColor DarkGray
+        # Cleanup old backups (keep last N)
+        Get-ChildItem (Split-Path $WtSettingsLocal -Parent) -Filter "settings.json.backup-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item $repoWt $WtSettingsLocal -Force
     Write-Host "  WT Settings      OK" -ForegroundColor Green
+} elseif (-not $WtSettingsLocal) {
+    Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red
 } else {
     Write-Host "  WT Settings      NOT IN REPO" -ForegroundColor Red
 }

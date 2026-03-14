@@ -13,10 +13,17 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 }
 
 $RepoRoot = $PSScriptRoot
+$MaxBackups = 3
 
-$PsProfileLocal  = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-$WtSettingsLocal = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-$OmpThemesLocal  = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
+$PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
+$OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
+
+# Detect WT settings path (Store + non-Store)
+$_wtPaths = @(
+    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
+    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
+)
+$WtSettingsLocal = $_wtPaths | Where-Object { Test-Path (Split-Path $_ -Parent) } | Select-Object -First 1
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -52,16 +59,18 @@ Write-Ok "$($themeFiles.Count) themes deployed"
 
 # ── Step 4: Deploy Windows Terminal settings ──
 Write-Step "Deploying Windows Terminal settings..."
-$wtDir = Split-Path $WtSettingsLocal -Parent
-if (Test-Path $wtDir) {
+if ($WtSettingsLocal) {
     if (Test-Path $WtSettingsLocal) {
         Copy-Item $WtSettingsLocal "$WtSettingsLocal.backup-$timestamp"
         Write-Ok "Backed up existing WT settings"
+        # Cleanup old backups (keep last N)
+        Get-ChildItem (Split-Path $WtSettingsLocal -Parent) -Filter "settings.json.backup-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
     Write-Ok "WT settings deployed"
 } else {
-    Write-Skip "Windows Terminal not found (install it from Microsoft Store)"
+    Write-Skip "Windows Terminal not found (install from Microsoft Store or winget)"
 }
 
 # ── Step 5: Deploy PowerShell profile ──
@@ -73,6 +82,9 @@ if (-not (Test-Path $profileDir)) {
 if (Test-Path $PsProfileLocal) {
     Copy-Item $PsProfileLocal "$PsProfileLocal.backup-$timestamp"
     Write-Ok "Backed up existing profile"
+    # Cleanup old backups (keep last N)
+    Get-ChildItem (Split-Path $PsProfileLocal -Parent) -Filter "Microsoft.PowerShell_profile.ps1.backup-*" |
+        Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
 }
 Copy-Item "$RepoRoot\configs\profile.ps1" $PsProfileLocal -Force
 Write-Ok "Profile deployed"

@@ -27,13 +27,20 @@ foreach ($c in $checks) {
     Write-Host $ver -ForegroundColor $color
 }
 
-# Config paths
+# Config paths — detect WT settings path (Store + non-Store)
+$_wtPaths = @(
+    (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
+    (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\settings.json")
+)
+$wtSettingsPath = $_wtPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $wtSettingsPath) { $wtSettingsPath = $_wtPaths[0] }
+
 Write-Host "`n  Config Locations" -ForegroundColor Cyan
 Write-Host "  ────────────────────────────────────" -ForegroundColor DarkGray
 
 $paths = @(
     @{ Name = "PS Profile";  Path = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1") }
-    @{ Name = "WT Settings"; Path = (Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json") }
+    @{ Name = "WT Settings"; Path = $wtSettingsPath }
     @{ Name = "OMP Themes";  Path = (Join-Path $env:USERPROFILE ".oh-my-posh\themes") }
 )
 

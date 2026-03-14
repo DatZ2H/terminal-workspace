@@ -1,9 +1,47 @@
-# ===== Oh My Posh =====
+# ===== WT Settings Path Detection (Store + non-Store) =====
+$_wtPaths = @(
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json",
+    "$env:LOCALAPPDATA\Microsoft\Windows Terminal\settings.json"
+)
+$WtSettingsPath = $_wtPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+# ===== Theme & Style Database =====
 $PnxThemes = "$env:USERPROFILE\.oh-my-posh\themes"
+
+$ThemeDB = @{
+    pro     = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json";  scheme = "Dracula Pro";       wtTheme = "PNX Dracula Pro"  }
+    dracula = @{ omp = "$PnxThemes\pnx-dracula.omp.json";      scheme = "Dracula";            wtTheme = "PNX Dracula"      }
+    tokyo   = @{ omp = "$PnxThemes\pnx-tokyo-storm.omp.json";  scheme = "Tokyo Night Storm";  wtTheme = "PNX Tokyo Night"  }
+    mocha   = @{ omp = "$PnxThemes\pnx-mocha.omp.json";        scheme = "Catppuccin Mocha";   wtTheme = "PNX Mocha"        }
+    nord    = @{ omp = "$PnxThemes\pnx-nord.omp.json";         scheme = "Nord";               wtTheme = "PNX Nord"         }
+}
+
+$StyleDB = @{
+    mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 70  }
+    win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 90  }
+    linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
+}
+
+# ===== Detect Current Theme & Style from WT Settings =====
 $Global:PnxCurrentTheme = "pro"
 $Global:PnxCurrentStyle = "mac"
 
-$_ompConfig = "$PnxThemes\pnx-dracula-pro.omp.json"
+if ($WtSettingsPath) {
+    try {
+        $_wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+        $_defaults = $_wtJson.profiles.defaults
+        foreach ($k in $ThemeDB.Keys) {
+            if ($ThemeDB[$k].scheme -eq $_defaults.colorScheme) { $Global:PnxCurrentTheme = $k; break }
+        }
+        foreach ($k in $StyleDB.Keys) {
+            if ($StyleDB[$k].opacity -eq $_defaults.opacity) { $Global:PnxCurrentStyle = $k; break }
+        }
+        Remove-Variable _wtJson, _defaults -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+# ===== Oh My Posh (init with detected theme) =====
+$_ompConfig = $ThemeDB[$Global:PnxCurrentTheme].omp
 if ((Get-Command oh-my-posh -ErrorAction SilentlyContinue) -and (Test-Path $_ompConfig)) {
     oh-my-posh init pwsh --config $_ompConfig | Invoke-Expression
 }
@@ -39,23 +77,6 @@ Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
 
 # ===== Default Parameters =====
 $PSDefaultParameterValues['Install-Module:Scope'] = 'CurrentUser'
-
-# ===== Theme & Style Database =====
-$WtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-
-$ThemeDB = @{
-    pro     = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json";  scheme = "Dracula Pro";       wtTheme = "PNX Dracula Pro"  }
-    dracula = @{ omp = "$PnxThemes\pnx-dracula.omp.json";      scheme = "Dracula";            wtTheme = "PNX Dracula"      }
-    tokyo   = @{ omp = "$PnxThemes\pnx-tokyo-storm.omp.json";  scheme = "Tokyo Night Storm";  wtTheme = "PNX Tokyo Night"  }
-    mocha   = @{ omp = "$PnxThemes\pnx-mocha.omp.json";        scheme = "Catppuccin Mocha";   wtTheme = "PNX Mocha"        }
-    nord    = @{ omp = "$PnxThemes\pnx-nord.omp.json";         scheme = "Nord";               wtTheme = "PNX Nord"         }
-}
-
-$StyleDB = @{
-    mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 70  }
-    win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 90  }
-    linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
-}
 
 # ===== Unified Theme Switcher =====
 function Set-Theme {
@@ -98,17 +119,28 @@ function Set-Theme {
     $s = $StyleDB[$Style]
 
     # 1. Switch OMP prompt
+    if (-not (Test-Path $t.omp)) {
+        Write-Host "  Theme file not found: $($t.omp)" -ForegroundColor Red
+        return
+    }
     oh-my-posh init pwsh --config $t.omp | Invoke-Expression
 
     # 2. Update Windows Terminal settings
-    if (-not (Test-Path $WtSettingsPath)) {
-        Write-Host "  OMP switched. WT settings not found — skipped." -ForegroundColor Yellow
+    if (-not $WtSettingsPath) {
+        Write-Host "  OMP switched. WT not found — skipped." -ForegroundColor Yellow
         $Global:PnxCurrentTheme = $Theme
         $Global:PnxCurrentStyle = $Style
         return
     }
 
-    $json = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+    try {
+        $json = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Host "  OMP switched. WT settings.json is corrupt — skipped." -ForegroundColor Red
+        $Global:PnxCurrentTheme = $Theme
+        $Global:PnxCurrentStyle = $Style
+        return
+    }
 
     $d = $json.profiles.defaults
     $d.colorScheme    = $t.scheme
@@ -117,7 +149,10 @@ function Set-Theme {
     $d.padding        = $s.padding
     $d.cursorShape    = $s.cursorShape
     $d.scrollbarState = $s.scrollbarState
-    if ($d.unfocusedAppearance) {
+
+    if (-not $d.unfocusedAppearance) {
+        $d | Add-Member -NotePropertyName unfocusedAppearance -NotePropertyValue ([PSCustomObject]@{ opacity = $s.unfocusedOpacity })
+    } else {
         $d.unfocusedAppearance.opacity = $s.unfocusedOpacity
     }
 
@@ -146,110 +181,27 @@ function Set-Style {
     Set-Theme -Theme $Global:PnxCurrentTheme -Style $Style
 }
 
-# ===== Maintenance Functions =====
+# ===== Maintenance Functions (delegate to standalone scripts) =====
 function Update-Tools {
-    Write-Host "`n  Updating tools..." -ForegroundColor Cyan
-
-    $packages = @("JanDeDobbeleer.OhMyPosh", "Git.Git", "OpenJS.NodeJS.LTS", "Python.Python.3.12")
-    foreach ($pkg in $packages) {
-        Write-Host "  winget: $pkg" -ForegroundColor DarkGray
-        winget upgrade --id $pkg --accept-package-agreements --accept-source-agreements --silent 2>$null
-    }
-
-    Write-Host "  module: Terminal-Icons" -ForegroundColor DarkGray
-    Update-Module Terminal-Icons -Force -ErrorAction SilentlyContinue
-
-    if (Get-Command scoop -ErrorAction SilentlyContinue) {
-        Write-Host "  scoop: updating all..." -ForegroundColor DarkGray
-        scoop update *
-    }
-
-    Write-Host "  font: CaskaydiaCove Nerd Font" -ForegroundColor DarkGray
-    oh-my-posh font install CascadiaCode 2>$null
-
-    Write-Host "`n  Done." -ForegroundColor Green
+    $script = "$env:PNX_TERMINAL_REPO\scripts\update-tools.ps1"
+    if (Test-Path $script) { & $script @args }
+    else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
 }
 
 function Sync-Config {
     param([Parameter(Position=0)][ValidateSet('push','pull')][string]$Direction)
-
     $repo = $env:PNX_TERMINAL_REPO
     if (-not $repo -or -not (Test-Path $repo)) {
-        Write-Host "  Repo not found." -ForegroundColor Red
-        Write-Host "  Set env var PNX_TERMINAL_REPO to your terminal-workspace path." -ForegroundColor Yellow
+        Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red
         return
     }
-
-    $profileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-    $wtLocal      = $WtSettingsPath
-    $themesLocal  = "$env:USERPROFILE\.oh-my-posh\themes"
-
-    if ($Direction -eq 'push') {
-        Copy-Item $profileLocal "$repo\configs\profile.ps1" -Force
-        Copy-Item $wtLocal "$repo\configs\terminal-settings.json" -Force
-        Get-ChildItem $themesLocal -Filter "pnx-*.omp.json" | Copy-Item -Destination "$repo\themes\" -Force
-        Write-Host "  Pushed local configs to repo." -ForegroundColor Green
-    }
-    elseif ($Direction -eq 'pull') {
-        $ts = Get-Date -Format "yyyyMMdd-HHmmss"
-        if (Test-Path $profileLocal) { Copy-Item $profileLocal "$profileLocal.backup-$ts" }
-        if (Test-Path $wtLocal)      { Copy-Item $wtLocal "$wtLocal.backup-$ts" }
-        Copy-Item "$repo\configs\profile.ps1" $profileLocal -Force
-        Copy-Item "$repo\configs\terminal-settings.json" $wtLocal -Force
-        if (-not (Test-Path $themesLocal)) { New-Item -ItemType Directory -Path $themesLocal -Force | Out-Null }
-        Copy-Item "$repo\themes\*.omp.json" $themesLocal -Force
-        Write-Host "  Pulled repo configs to local. Restart terminal to apply." -ForegroundColor Green
-    }
-    else {
-        Write-Host "  Usage: Sync-Config push | pull" -ForegroundColor Yellow
-    }
+    if ($Direction -eq 'push') { & "$repo\scripts\sync-to-repo.ps1" }
+    elseif ($Direction -eq 'pull') { & "$repo\scripts\sync-from-repo.ps1" }
+    else { Write-Host "  Usage: Sync-Config push | pull" -ForegroundColor Yellow }
 }
 
 function Get-Status {
-    Write-Host "`n  Tool Versions" -ForegroundColor Cyan
-    Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
-
-    $tools = @(
-        @{ Name = "PowerShell";     Cmd = { $PSVersionTable.PSVersion.ToString() } }
-        @{ Name = "Oh My Posh";     Cmd = { oh-my-posh version 2>$null } }
-        @{ Name = "Git";            Cmd = { (git --version 2>$null) -replace 'git version ','' } }
-        @{ Name = "Node.js";        Cmd = { (node --version 2>$null) -replace 'v','' } }
-        @{ Name = "npm";            Cmd = { npm --version 2>$null } }
-        @{ Name = "Python";         Cmd = { (python --version 2>$null) -replace 'Python ','' } }
-        @{ Name = "PSReadLine";     Cmd = { (Get-Module PSReadLine -ErrorAction SilentlyContinue).Version.ToString() } }
-        @{ Name = "Terminal-Icons"; Cmd = { (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1).Version.ToString() } }
-        @{ Name = "Scoop";          Cmd = { (scoop --version 2>$null | Select-Object -First 1) -replace 'v','' } }
-        @{ Name = "zoxide";         Cmd = { (zoxide --version 2>$null) -replace 'zoxide ','' } }
-        @{ Name = "ripgrep";        Cmd = { (rg --version 2>$null | Select-Object -First 1) -replace 'ripgrep ','' } }
-    )
-
-    foreach ($t in $tools) {
-        $ver = try { & $t.Cmd } catch { $null }
-        $color = if ($ver) { "Green" } else { "Red" }
-        if (-not $ver) { $ver = "not found" }
-        Write-Host ("  {0,-18}" -f $t.Name) -NoNewline
-        Write-Host $ver -ForegroundColor $color
-    }
-
-    Write-Host "`n  Config Locations" -ForegroundColor Cyan
-    Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
-    $cfgPaths = @(
-        @{ Name = "PS Profile";  Path = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1") }
-        @{ Name = "WT Settings"; Path = $WtSettingsPath }
-        @{ Name = "OMP Themes";  Path = "$env:USERPROFILE\.oh-my-posh\themes" }
-    )
-    foreach ($p in $cfgPaths) {
-        $exists = Test-Path $p.Path
-        $status = if ($exists) { "OK" } else { "MISSING" }
-        $color  = if ($exists) { "Green" } else { "Red" }
-        Write-Host ("  {0,-18}{1,-10}" -f $p.Name, $status) -ForegroundColor $color
-    }
-
-    Write-Host "`n  Current Theme" -ForegroundColor Cyan
-    Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
-    Write-Host "  Theme: " -NoNewline
-    Write-Host $Global:PnxCurrentTheme -ForegroundColor Cyan
-    Write-Host "  Style: " -NoNewline
-    Write-Host $Global:PnxCurrentStyle -ForegroundColor Green
-    Write-Host ""
+    $script = "$env:PNX_TERMINAL_REPO\scripts\status.ps1"
+    if (Test-Path $script) { & $script }
+    else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
 }
