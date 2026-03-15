@@ -64,12 +64,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 }
 
 $RepoRoot = $PSScriptRoot
-$MaxBackups = 3
-
-$PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-$OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 
 . "$RepoRoot\scripts\common.ps1"
+
+$PsProfileLocal = $PsProfilePath
 $WtSettingsLocal = Get-WtSettingsPath -Mode deploy
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"

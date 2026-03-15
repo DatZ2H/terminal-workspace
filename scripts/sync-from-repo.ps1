@@ -2,12 +2,10 @@
 # Copy config files from this repo to local system (with backup)
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
-$MaxBackups = 3
-
-$PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-$OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
 
 . "$PSScriptRoot\common.ps1"
+
+$PsProfileLocal = $PsProfilePath
 $WtSettingsLocal = Get-WtSettingsPath -Mode deploy
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"

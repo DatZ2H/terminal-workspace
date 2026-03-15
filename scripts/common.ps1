@@ -4,6 +4,12 @@
 # -- Version Constants --
 $PythonVersion = "3.12"
 
+# -- Shared Path Constants --
+$MaxBackups      = 3
+$OmpThemesLocal  = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
+$PsProfileDir    = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell"
+$PsProfilePath   = Join-Path $PsProfileDir "Microsoft.PowerShell_profile.ps1"
+
 # -- WT Settings Path Detection (Store + non-Store) --
 # Two modes:
 #   "file"   -- returns path only if the file exists (for reading/reporting)
@@ -57,6 +63,44 @@ function Repair-WtFontFace {
     if (-not $d -or -not $d.font -or -not $d.font.face) { return $false }
     if ($d.font.face -eq $fi.FontFace) { return $false }
     $d.font.face = $fi.FontFace
-    $json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
+    $tempPath = "$WtPath.pnx-tmp"
+    $json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
+    try {
+        Move-Item $tempPath $WtPath -Force -ErrorAction Stop
+    } catch {
+        # Fallback: direct write if Move-Item fails
+        $json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
+        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+    }
     return $true
+}
+
+# -- Atomic WT Settings Writer --
+# Backup + temp file + Move-Item with retry + fallback Set-Content
+# Returns $true on success, $false on failure
+function Save-WtSettings {
+    param(
+        [Parameter(Mandatory)][object]$Json,
+        [Parameter(Mandatory)][string]$WtPath
+    )
+    # Backup
+    Copy-Item $WtPath "$WtPath.pnx-backup" -Force -ErrorAction SilentlyContinue
+    # Write to temp file
+    $tempPath = "$WtPath.pnx-tmp"
+    $Json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
+    # Try Move-Item with retry (WT may hold file lock briefly)
+    for ($retry = 0; $retry -lt 3; $retry++) {
+        try {
+            Move-Item $tempPath $WtPath -Force -ErrorAction Stop
+            return $true
+        } catch { Start-Sleep -Milliseconds 200 }
+    }
+    # Last resort: direct write (non-atomic but better than silent failure)
+    try {
+        $Json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
+        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch {
+        return $false
+    }
 }

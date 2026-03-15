@@ -31,16 +31,16 @@ foreach ($c in $checks) {
 $wtSettingsPath = Get-WtSettingsPath -Mode file
 if (-not $wtSettingsPath) {
     # Fallback to Store path for display purposes
-    $wtSettingsPath = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+    $wtSettingsPath = Get-WtSettingsPath -Mode deploy
 }
 
 Write-Host "`n  Config Locations" -ForegroundColor Cyan
 Write-Host "  ────────────────────────────────────" -ForegroundColor DarkGray
 
 $paths = @(
-    @{ Name = "PS Profile";  Path = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1") }
+    @{ Name = "PS Profile";  Path = $PsProfilePath }
     @{ Name = "WT Settings"; Path = $wtSettingsPath }
-    @{ Name = "OMP Themes";  Path = (Join-Path $env:USERPROFILE ".oh-my-posh\themes") }
+    @{ Name = "OMP Themes";  Path = $OmpThemesLocal }
 )
 
 foreach ($p in $paths) {
@@ -80,7 +80,6 @@ if ($fi.FontFace -and $wtSettingsPath -and (Test-Path $wtSettingsPath)) {
 }
 
 # Theme count
-$themeDir = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
-$themeCount = (Get-ChildItem $themeDir -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue).Count
+$themeCount = (Get-ChildItem $OmpThemesLocal -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue).Count
 Write-Host "`n  PNX Themes:      $themeCount installed" -ForegroundColor $(if ($themeCount -gt 0) { "Green" } else { "Yellow" })
 Write-Host ""

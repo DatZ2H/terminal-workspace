@@ -101,6 +101,7 @@ if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
 } else {
     oh-my-posh init pwsh --config $_ompConfig | Invoke-Expression
 }
+Remove-Variable _ompConfig, _fallback -ErrorAction SilentlyContinue
 
 # ===== Terminal Icons (auto-install if missing) =====
 if (Get-Module -ListAvailable -Name Terminal-Icons) {
@@ -203,6 +204,12 @@ Register-ArgumentCompleter -CommandName Set-Style -ParameterName Style -ScriptBl
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }.GetNewClosure()
+Register-ArgumentCompleter -CommandName New-PnxTheme -ParameterName BasedOn -ScriptBlock {
+    param($cmd, $param, $word)
+    $ThemeDB.Keys | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $ThemeDB[$_].scheme)
+    }
+}.GetNewClosure()
 
 # ===== Theme List Display =====
 function Get-ThemeList {
@@ -222,6 +229,189 @@ function Get-ThemeList {
 
     Write-Host ""
     Write-Host "  Style: $Global:PnxCurrentStyle" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+# ===== Theme Integrity Validation =====
+function Test-ThemeIntegrity {
+    param([switch]$Quiet)
+
+    # Read WT settings for scheme/theme validation
+    $wtSchemes = @()
+    $wtThemes  = @()
+    if ($WtSettingsPath -and (Test-Path $WtSettingsPath)) {
+        try {
+            $wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+            if ($wtJson.schemes) { $wtSchemes = @($wtJson.schemes | ForEach-Object { $_.name }) }
+            if ($wtJson.themes)  { $wtThemes  = @($wtJson.themes  | ForEach-Object { $_.name }) }
+        } catch {
+            if ($Quiet) { return $false }
+            Write-Host "  Cannot read WT settings.json — aborting integrity check." -ForegroundColor Red
+            return
+        }
+    }
+
+    $issues = 0
+    $results = @()
+
+    foreach ($key in ($ThemeDB.Keys | Sort-Object)) {
+        $entry = $ThemeDB[$key]
+        $ompOk    = Test-Path $entry.omp
+        $schemeOk = $wtSchemes -contains $entry.scheme
+        $wtOk     = $wtThemes  -contains $entry.wtTheme
+
+        if (-not $ompOk -or -not $schemeOk -or -not $wtOk) { $issues++ }
+
+        $results += [PSCustomObject]@{
+            Key      = $key
+            OmpOk    = $ompOk
+            SchemeOk = $schemeOk
+            WtOk     = $wtOk
+        }
+    }
+
+    if ($Quiet) { return ($issues -eq 0) }
+
+    # Display table
+    Write-Host ""
+    Write-Host "  Theme Integrity Check" -ForegroundColor White
+    $line = [string]::new([char]0x2500, 21)
+    Write-Host "  $line" -ForegroundColor DarkGray
+
+    foreach ($r in $results) {
+        $allOk = $r.OmpOk -and $r.SchemeOk -and $r.WtOk
+        $status = if ($allOk) { "OK" } else { "FAIL" }
+        $statusColor = if ($allOk) { "Green" } else { "Red" }
+        $ompMark    = if ($r.OmpOk)    { "OK" } else { "MISSING" }
+        $schemeMark = if ($r.SchemeOk) { "OK" } else { "MISSING" }
+        $wtMark     = if ($r.WtOk)     { "OK" } else { "MISSING" }
+
+        $ompColor    = if ($r.OmpOk)    { "Green" } else { "Red" }
+        $schemeColor = if ($r.SchemeOk) { "Green" } else { "Red" }
+        $wtColor     = if ($r.WtOk)     { "Green" } else { "Red" }
+
+        Write-Host "  " -NoNewline
+        Write-Host "$($status.PadRight(6))" -ForegroundColor $statusColor -NoNewline
+        Write-Host "$($r.Key.PadRight(14))" -NoNewline
+        Write-Host "OMP " -ForegroundColor DarkGray -NoNewline
+        Write-Host "$($ompMark.PadRight(9))" -ForegroundColor $ompColor -NoNewline
+        Write-Host "Scheme " -ForegroundColor DarkGray -NoNewline
+        Write-Host "$($schemeMark.PadRight(9))" -ForegroundColor $schemeColor -NoNewline
+        Write-Host "WtTheme " -ForegroundColor DarkGray -NoNewline
+        Write-Host "$wtMark" -ForegroundColor $wtColor
+    }
+
+    Write-Host ""
+    if ($issues -gt 0) {
+        Write-Host "  $issues issue(s) found. Fix before Sync-Config push." -ForegroundColor Yellow
+    } else {
+        Write-Host "  All $($results.Count) themes OK." -ForegroundColor Green
+    }
+    Write-Host ""
+}
+
+# ===== Theme Scaffolding =====
+function New-PnxTheme {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$BasedOn,
+        [string]$Scheme,
+        [ValidatePattern('^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')]
+        [string]$Background
+    )
+
+    # Validate
+    if (-not $ThemeDB.ContainsKey($BasedOn)) {
+        Write-Host "  Base theme '$BasedOn' not found in ThemeDB." -ForegroundColor Red
+        Write-Host "  Available: $(($ThemeDB.Keys | Sort-Object) -join ', ')" -ForegroundColor DarkGray
+        return
+    }
+    if ($ThemeDB.ContainsKey($Name)) {
+        Write-Host "  Theme '$Name' already exists in ThemeDB." -ForegroundColor Red
+        return
+    }
+
+    $displayName = if ($Scheme) { $Scheme } else {
+        (Get-Culture).TextInfo.ToTitleCase($Name)
+    }
+    $wtThemeName = "PNX $displayName"
+
+    # 1. Copy OMP file
+    $baseOmp = $ThemeDB[$BasedOn].omp
+    $newOmp  = "$PnxThemes\pnx-$Name.omp.json"
+    if (-not (Test-Path $baseOmp)) {
+        Write-Host "  Base OMP file not found: $baseOmp" -ForegroundColor Red
+        return
+    }
+    $ompContent = Get-Content $baseOmp -Raw
+    if ($Background) {
+        # Replace only the first background color (palette/global), preserve per-segment colors
+        $ompContent = ([regex]'"background"\s*:\s*"#[0-9a-fA-F]{3,8}"').Replace($ompContent, "`"background`": `"$Background`"", 1)
+    }
+    $ompContent | Set-Content $newOmp -Encoding utf8NoBOM
+
+    # 2. Clone color scheme in WT settings
+    if (-not $WtSettingsPath -or -not (Test-Path $WtSettingsPath)) {
+        Write-Host "  OMP file created but WT settings not found — manual scheme/theme setup needed." -ForegroundColor Yellow
+        $ThemeDB[$Name] = @{ omp = $newOmp; scheme = $displayName; wtTheme = $wtThemeName }
+        return
+    }
+
+    try {
+        $wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Host "  OMP file created but WT settings.json is corrupt." -ForegroundColor Red
+        return
+    }
+
+    if (-not $wtJson.schemes) { $wtJson | Add-Member -NotePropertyName schemes -NotePropertyValue @() -Force }
+    $baseScheme = $wtJson.schemes | Where-Object { $_.name -eq $ThemeDB[$BasedOn].scheme }
+    if ($baseScheme) {
+        $newScheme = $baseScheme | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+        $newScheme.name = $displayName
+        if ($Background) { $newScheme.background = $Background }
+        $wtJson.schemes = @($wtJson.schemes) + $newScheme
+    } else {
+        Write-Host "  Base scheme '$($ThemeDB[$BasedOn].scheme)' not found in WT — scheme not cloned." -ForegroundColor Yellow
+    }
+
+    # 3. Create WT theme (derive from base)
+    if (-not $wtJson.themes) { $wtJson | Add-Member -NotePropertyName themes -NotePropertyValue @() -Force }
+    $baseWtTheme = $wtJson.themes | Where-Object { $_.name -eq $ThemeDB[$BasedOn].wtTheme }
+    if ($baseWtTheme) {
+        $newWtTheme = $baseWtTheme | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+        $newWtTheme.name = $wtThemeName
+        if ($Background -and $newWtTheme.tab)    { $newWtTheme.tab.background    = $Background }
+        if ($Background -and $newWtTheme.tabRow)  { $newWtTheme.tabRow.background = $Background }
+        $wtJson.themes = @($wtJson.themes) + $newWtTheme
+    } else {
+        Write-Host "  Base WT theme '$($ThemeDB[$BasedOn].wtTheme)' not found — WT theme not created." -ForegroundColor Yellow
+    }
+
+    # Write WT settings (atomic)
+    if (Get-Command Save-WtSettings -ErrorAction SilentlyContinue) {
+        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsPath)) {
+            Write-Host "  WT settings locked — OMP file created but WT changes not saved." -ForegroundColor Red
+        }
+    } else {
+        $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsPath -Encoding utf8NoBOM
+    }
+
+    # 4. Add to runtime ThemeDB
+    $ThemeDB[$Name] = @{ omp = $newOmp; scheme = $displayName; wtTheme = $wtThemeName }
+
+    # 5. Summary
+    Write-Host ""
+    Write-Host "  Created theme: $Name (based on $BasedOn)" -ForegroundColor Green
+    $line = [string]::new([char]0x2500, 37)
+    Write-Host "  $line" -ForegroundColor DarkGray
+    Write-Host "  OMP file:    $newOmp" -ForegroundColor DarkGray
+    Write-Host "  Scheme:      $displayName" -ForegroundColor DarkGray
+    Write-Host "  WT Theme:    $wtThemeName" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Next steps:" -ForegroundColor White
+    Write-Host "    Set-Theme $Name            # preview" -ForegroundColor DarkGray
+    Write-Host "    Sync-Config push            # save to repo" -ForegroundColor DarkGray
     Write-Host ""
 }
 
@@ -409,29 +599,18 @@ function Set-Theme {
     }
 
     # Atomic write: backup → temp file → rename (with retry if WT holds file lock)
-    Copy-Item $WtSettingsPath "$WtSettingsPath.pnx-backup" -Force -ErrorAction SilentlyContinue
-    $tempPath = "$WtSettingsPath.pnx-tmp"
-    $json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
-    $written = $false
-    for ($retry = 0; $retry -lt 3; $retry++) {
-        try {
-            Move-Item $tempPath $WtSettingsPath -Force -ErrorAction Stop
-            $written = $true
-            break
-        } catch {
-            Start-Sleep -Milliseconds 200
-        }
-    }
-    if (-not $written) {
-        # Last resort: direct write (non-atomic but better than silent failure)
+    if (Get-Command Save-WtSettings -ErrorAction SilentlyContinue) {
+        $written = Save-WtSettings -Json $json -WtPath $WtSettingsPath
+    } else {
+        # Fallback if common.ps1 not loaded
         try {
             $json | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsPath -Encoding utf8NoBOM
-            Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
             $written = $true
-        } catch {
-            Write-Host "  OMP switched but WT settings locked — restart terminal and retry." -ForegroundColor Red
-            return
-        }
+        } catch { $written = $false }
+    }
+    if (-not $written) {
+        Write-Host "  OMP switched but WT settings locked — restart terminal and retry." -ForegroundColor Red
+        return
     }
 
     $Global:PnxCurrentTheme = $Theme
@@ -467,7 +646,19 @@ function Sync-Config {
         Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red
         return
     }
-    if ($Direction -eq 'push') { & "$repo\scripts\sync-to-repo.ps1" -Force:$Force }
+    if ($Direction -eq 'push') {
+        $integrityOk = Test-ThemeIntegrity -Quiet
+        if (-not $integrityOk) {
+            Write-Host "  Theme integrity issues detected:" -ForegroundColor Yellow
+            Test-ThemeIntegrity
+            $confirm = Read-Host "  Continue push anyway? (y/N)"
+            if ($confirm -notin @('y','Y','yes')) {
+                Write-Host "  Push cancelled." -ForegroundColor DarkGray
+                return
+            }
+        }
+        & "$repo\scripts\sync-to-repo.ps1" -Force:$Force
+    }
     elseif ($Direction -eq 'pull') {
         & "$repo\scripts\sync-from-repo.ps1"
         Write-Host "  Reloading profile..." -ForegroundColor Cyan

@@ -5,10 +5,9 @@ param([switch]$Force)
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 
-$PsProfileLocal = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell\Microsoft.PowerShell_profile.ps1"
-$OmpThemesLocal = Join-Path $env:USERPROFILE ".oh-my-posh\themes"
-
 . "$PSScriptRoot\common.ps1"
+
+$PsProfileLocal = $PsProfilePath
 $WtSettingsLocal = Get-WtSettingsPath -Mode file
 
 Write-Host "`n  Syncing: local -> repo" -ForegroundColor Cyan

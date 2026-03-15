@@ -7,6 +7,11 @@ Write-Host "  ══════════════════════
 . "$PSScriptRoot\common.ps1"
 $script:errorCount = 0
 
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host "  winget not found — install from Microsoft Store or msstore.dev" -ForegroundColor Red
+    exit 1
+}
+
 $tools = @(
     @{ Id = "Microsoft.PowerShell";            Name = "PowerShell 7" }
     @{ Id = "JanDeDobbeleer.OhMyPosh";         Name = "Oh My Posh" }
