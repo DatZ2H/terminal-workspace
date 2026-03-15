@@ -39,7 +39,7 @@ Restart Windows Terminal after bootstrap completes.
 | Terminal-Icons | PS module | File/folder icons |
 | CaskaydiaCove NF | OMP | Nerd Font for prompt icons |
 
-### Themes (5 color themes)
+### Themes (14 color themes)
 
 | Name | Key | Based on |
 |------|-----|----------|
@@ -48,6 +48,15 @@ Restart Windows Terminal after bootstrap completes.
 | Tokyo Night Storm | `tokyo` | Blue-indigo, calm |
 | Catppuccin Mocha | `mocha` | Warm pastels |
 | Nord | `nord` | Arctic, muted tones |
+| Dark Sea Green | `seagreen` | Deep ocean-green, muted oceanic |
+| Organic Green | `organic` | Light honeydew/mint, earthy greens |
+| Nihileaf | `nihileaf` | Dark monochromatic green |
+| Miasma | `miasma` | Warm earthy tones, olive greens |
+| Jake Green Grey | `jake` | Muted green-grey, desaturated |
+| Kryptonite | `kryptonite` | Neon green on black, cyberpunk |
+| fl0-c0d3 | `fl0` | Nord-like base with green accents |
+| Green Dark Supercharged | `greendark` | Bright neon on dark, Material-inspired |
+| Green Nordic | `greennord` | Teal-dark, earthy nordic |
 
 Theme is auto-detected from Windows Terminal settings on each session start.
 OMP prompt always matches the active WT color scheme.
@@ -125,7 +134,16 @@ terminal-workspace/
 │   ├── pnx-dracula.omp.json
 │   ├── pnx-tokyo-storm.omp.json
 │   ├── pnx-mocha.omp.json
-│   └── pnx-nord.omp.json
+│   ├── pnx-nord.omp.json
+│   ├── pnx-dark-sea-green.omp.json
+│   ├── pnx-organic-green.omp.json
+│   ├── pnx-nihileaf.omp.json
+│   ├── pnx-miasma.omp.json
+│   ├── pnx-jake-green-grey.omp.json
+│   ├── pnx-kryptonite.omp.json
+│   ├── pnx-fl0.omp.json
+│   ├── pnx-green-dark.omp.json
+│   └── pnx-green-nordic.omp.json
 └── scripts/
     ├── common.ps1                # Shared helpers (WT path detection, font info, constants)
     ├── install-tools.ps1         # Install winget + scoop packages

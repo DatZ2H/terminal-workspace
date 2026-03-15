@@ -16,11 +16,20 @@ Remove-Variable _commonScript -ErrorAction SilentlyContinue
 $PnxThemes = if ($env:PNX_OMP_THEMES) { $env:PNX_OMP_THEMES } else { "$env:USERPROFILE\.oh-my-posh\themes" }
 
 $ThemeDB = @{
-    pro     = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json";  scheme = "Dracula Pro";       wtTheme = "PNX Dracula Pro"  }
-    dracula = @{ omp = "$PnxThemes\pnx-dracula.omp.json";      scheme = "Dracula";            wtTheme = "PNX Dracula"      }
-    tokyo   = @{ omp = "$PnxThemes\pnx-tokyo-storm.omp.json";  scheme = "Tokyo Night Storm";  wtTheme = "PNX Tokyo Night"  }
-    mocha   = @{ omp = "$PnxThemes\pnx-mocha.omp.json";        scheme = "Catppuccin Mocha";   wtTheme = "PNX Mocha"        }
-    nord    = @{ omp = "$PnxThemes\pnx-nord.omp.json";         scheme = "Nord";               wtTheme = "PNX Nord"         }
+    pro        = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json";    scheme = "Dracula Pro";            wtTheme = "PNX Dracula Pro"      }
+    dracula    = @{ omp = "$PnxThemes\pnx-dracula.omp.json";        scheme = "Dracula";                wtTheme = "PNX Dracula"          }
+    tokyo      = @{ omp = "$PnxThemes\pnx-tokyo-storm.omp.json";    scheme = "Tokyo Night Storm";      wtTheme = "PNX Tokyo Night"      }
+    mocha      = @{ omp = "$PnxThemes\pnx-mocha.omp.json";          scheme = "Catppuccin Mocha";       wtTheme = "PNX Mocha"            }
+    nord       = @{ omp = "$PnxThemes\pnx-nord.omp.json";           scheme = "Nord";                   wtTheme = "PNX Nord"             }
+    seagreen   = @{ omp = "$PnxThemes\pnx-dark-sea-green.omp.json"; scheme = "Dark Sea Green";         wtTheme = "PNX Dark Sea Green"   }
+    organic    = @{ omp = "$PnxThemes\pnx-organic-green.omp.json";  scheme = "Organic Green";          wtTheme = "PNX Organic Green"    }
+    nihileaf   = @{ omp = "$PnxThemes\pnx-nihileaf.omp.json";       scheme = "Nihileaf";               wtTheme = "PNX Nihileaf"         }
+    miasma     = @{ omp = "$PnxThemes\pnx-miasma.omp.json";         scheme = "Miasma";                 wtTheme = "PNX Miasma"           }
+    jake       = @{ omp = "$PnxThemes\pnx-jake-green-grey.omp.json";scheme = "Jake Green Grey";        wtTheme = "PNX Jake Green Grey"  }
+    kryptonite = @{ omp = "$PnxThemes\pnx-kryptonite.omp.json";     scheme = "Kryptonite";             wtTheme = "PNX Kryptonite"       }
+    fl0        = @{ omp = "$PnxThemes\pnx-fl0.omp.json";            scheme = "fl0-c0d3";               wtTheme = "PNX fl0-c0d3"         }
+    greendark  = @{ omp = "$PnxThemes\pnx-green-dark.omp.json";     scheme = "Green Dark Supercharged";wtTheme = "PNX Green Dark"       }
+    greennord  = @{ omp = "$PnxThemes\pnx-green-nordic.omp.json";   scheme = "Green Nordic";           wtTheme = "PNX Green Nordic"     }
 }
 
 $StyleDB = @{
@@ -128,7 +137,9 @@ Remove-Variable _fontInfo -ErrorAction SilentlyContinue
 
 # ===== Auto-fix WT font face if using stale v2/v3 name =====
 if (Get-Command Repair-WtFontFace -ErrorAction SilentlyContinue) {
-    try { Repair-WtFontFace -WtPath $WtSettingsPath | Out-Null } catch {}
+    try { Repair-WtFontFace -WtPath $WtSettingsPath | Out-Null } catch {
+        $_healthIssues += "WT font face repair failed: $_"
+    }
 }
 
 # ===== Zoxide =====
@@ -174,23 +185,132 @@ Remove-Variable _healthIssues -ErrorAction SilentlyContinue
 $PSDefaultParameterValues['Install-Module:Scope'] = 'CurrentUser'
 
 # ===== Tab Completion for Set-Theme / Set-Style =====
-# Note: ScriptBlocks run in their own scope — cannot access $ThemeDB/$StyleDB, so values are listed explicitly.
 Register-ArgumentCompleter -CommandName Set-Theme -ParameterName Theme -ScriptBlock {
     param($cmd, $param, $word)
-    @('pro','dracula','tokyo','mocha','nord') | Where-Object { $_ -like "$word*" } | ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    $ThemeDB.Keys | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $ThemeDB[$_].scheme)
     }
-}
+}.GetNewClosure()
 Register-ArgumentCompleter -CommandName Set-Theme -ParameterName Style -ScriptBlock {
     param($cmd, $param, $word)
-    @('mac','win','linux') | Where-Object { $_ -like "$word*" } | ForEach-Object {
+    $StyleDB.Keys | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
-}
+}.GetNewClosure()
 Register-ArgumentCompleter -CommandName Set-Style -ParameterName Style -ScriptBlock {
     param($cmd, $param, $word)
-    @('mac','win','linux') | Where-Object { $_ -like "$word*" } | ForEach-Object {
+    $StyleDB.Keys | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}.GetNewClosure()
+
+# ===== Theme List Display =====
+function Get-ThemeList {
+    $sorted = $ThemeDB.Keys | Sort-Object
+    $count  = $sorted.Count
+    Write-Host ""
+    Write-Host "  PNX Themes ($count available)" -ForegroundColor White
+    Write-Host ""
+
+    foreach ($key in $sorted) {
+        $scheme = $ThemeDB[$key].scheme
+        $active = $key -eq $Global:PnxCurrentTheme
+        $marker = if ($active) { "> " } else { "  " }
+        $color  = if ($active) { "Cyan" } else { "DarkGray" }
+        Write-Host "  $marker$($key.PadRight(13))$scheme" -ForegroundColor $color
+    }
+
+    Write-Host ""
+    Write-Host "  Style: $Global:PnxCurrentStyle" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+# ===== Interactive Theme Selector =====
+function Select-ThemeInteractive {
+    $esc = [char]27
+    $sorted = $ThemeDB.Keys | Sort-Object
+    if ($sorted.Count -eq 0) { return $null }
+
+    # Find initial cursor position (current active theme)
+    $idx = 0
+    for ($i = 0; $i -lt $sorted.Count; $i++) {
+        if ($sorted[$i] -eq $Global:PnxCurrentTheme) { $idx = $i; break }
+    }
+
+    $count = $sorted.Count
+
+    # --- Render helpers ---
+    function Format-Row($key, $pos, $curIdx, $activeKey) {
+        $scheme = $ThemeDB[$key].scheme
+        $isCursor = $pos -eq $curIdx
+        $isActive = $key -eq $activeKey
+        if ($isCursor) {
+            $marker = "> "
+        } elseif ($isActive) {
+            $marker = "* "
+        } else {
+            $marker = "  "
+        }
+        $text = "  $marker$($key.PadRight(13))$scheme"
+        if ($isCursor) {
+            return "$esc[7m$text$esc[0m"
+        } elseif ($isActive) {
+            return "$esc[36m$text$esc[0m"
+        } else {
+            return "$esc[90m$text$esc[0m"
+        }
+    }
+
+    try {
+        # Hide cursor
+        [Console]::Write("$esc[?25l")
+
+        # Initial full render
+        [Console]::WriteLine("")
+        [Console]::WriteLine("$esc[97m  PNX Themes ($count available)$esc[0m")
+        [Console]::WriteLine("")
+        for ($i = 0; $i -lt $count; $i++) {
+            [Console]::WriteLine((Format-Row $sorted[$i] $i $idx $Global:PnxCurrentTheme))
+        }
+        [Console]::WriteLine("")
+        [Console]::WriteLine("$esc[90m  Up/Down: navigate  Enter: apply  Esc: cancel$esc[0m")
+        [Console]::WriteLine("")
+
+        # Input loop
+        while ($true) {
+            $key = [Console]::ReadKey($true)
+
+            if ($key.Key -eq 'Escape') {
+                return $null
+            }
+
+            if ($key.Key -eq 'Enter') {
+                return $sorted[$idx]
+            }
+
+            $prevIdx = $idx
+            if ($key.Key -eq 'UpArrow' -and $idx -gt 0) {
+                $idx--
+            } elseif ($key.Key -eq 'DownArrow' -and $idx -lt ($count - 1)) {
+                $idx++
+            } else {
+                continue
+            }
+
+            # Redraw only changed rows (previous and new cursor position)
+            # Distance from current cursor (after footer) to a theme row:
+            # footer has 3 lines, themes are 0-indexed from top of theme block
+            # Row $i is at offset: (footer 3 lines) + ($count - 1 - $i) lines up from current pos
+
+            foreach ($ri in @($prevIdx, $idx)) {
+                $linesUp = 3 + ($count - 1 - $ri)
+                $line = Format-Row $sorted[$ri] $ri $idx $Global:PnxCurrentTheme
+                [Console]::Write("$esc[$($linesUp)A$esc[2K$line$esc[$($linesUp)B`r")
+            }
+        }
+    } finally {
+        # Restore cursor
+        [Console]::Write("$esc[?25h")
     }
 }
 
@@ -202,18 +322,12 @@ function Set-Theme {
     )
 
     if (-not $Theme) {
-        Write-Host ""
-        Write-Host "  Current: " -NoNewline
-        Write-Host "$Global:PnxCurrentTheme" -ForegroundColor Cyan -NoNewline
-        Write-Host " + " -NoNewline
-        Write-Host "$Global:PnxCurrentStyle" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "  Themes:  pro  dracula  tokyo  mocha  nord" -ForegroundColor DarkGray
-        Write-Host "  Styles:  mac  win  linux" -ForegroundColor DarkGray
-        Write-Host ""
-        Write-Host "  Usage:   Set-Theme <theme> [style]" -ForegroundColor DarkGray
-        Write-Host "           Set-Style <style>" -ForegroundColor DarkGray
-        Write-Host ""
+        $picked = Select-ThemeInteractive
+        if ($picked) {
+            Set-Theme $picked
+        } else {
+            Write-Host "  Cancelled." -ForegroundColor DarkGray
+        }
         return
     }
 
@@ -354,7 +468,11 @@ function Sync-Config {
         return
     }
     if ($Direction -eq 'push') { & "$repo\scripts\sync-to-repo.ps1" -Force:$Force }
-    elseif ($Direction -eq 'pull') { & "$repo\scripts\sync-from-repo.ps1" }
+    elseif ($Direction -eq 'pull') {
+        & "$repo\scripts\sync-from-repo.ps1"
+        Write-Host "  Reloading profile..." -ForegroundColor Cyan
+        . $PROFILE
+    }
     else { Write-Host "  Usage: Sync-Config push|pull [-Force]" -ForegroundColor Yellow }
 }
 

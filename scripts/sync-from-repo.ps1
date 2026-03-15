@@ -69,8 +69,10 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
                 $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
             }
         }
-    } catch {}
-    Write-Host "  WT Settings      OK" -ForegroundColor Green
+        Write-Host "  WT Settings      OK" -ForegroundColor Green
+    } catch {
+        Write-Host "  WT Settings      WARNING: JSON marker processing failed: $_" -ForegroundColor Yellow
+    }
 } elseif (-not $WtSettingsLocal) {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red
 } else {
