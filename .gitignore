@@ -1,2 +1,3 @@
 *.backup-*
 *.log
+bash.exe.stackdump

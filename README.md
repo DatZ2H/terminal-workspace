@@ -58,6 +58,7 @@ Restart Windows Terminal after bootstrap completes.
 | Green Dark Supercharged | `greendark` | Bright neon on dark, Material-inspired |
 | Green Nordic | `greennord` | Teal-dark, earthy nordic |
 
+Run `Set-Theme` with no arguments to launch the interactive picker (arrow keys to browse, Enter to select).
 Theme is auto-detected from Windows Terminal settings on each session start.
 OMP prompt always matches the active WT color scheme.
 
@@ -159,12 +160,13 @@ terminal-workspace/
 ### Theme & Style
 
 ```powershell
-Set-Theme                         # Show current theme + all options
+Set-Theme                         # Interactive theme picker (arrow keys + Enter)
 Set-Theme pro                     # Switch to Dracula Pro (keep current style)
 Set-Theme tokyo win               # Switch theme + style together
 Set-Theme mocha linux             # Catppuccin Mocha + Linux style
 Set-Style mac                     # Switch style only (keep current theme)
 Set-Style                         # Show current style
+Test-ThemeIntegrity               # Check ThemeDB vs OMP files vs WT schemes
 ```
 
 Tab completion is available for `Set-Theme` and `Set-Style` parameters.
@@ -228,6 +230,7 @@ Get-Status                        # Show versions of all tools + config paths
 Update-Tools                      # Update everything (winget + scoop + modules + font)
 Update-Tools -Force               # Update without confirmation prompt
 Update-Workspace                  # Git pull + redeploy configs + reload profile
+Test-ThemeIntegrity               # Verify ThemeDB, OMP files, and WT schemes are in sync
 ```
 
 ### Sync Between Machines
