@@ -148,10 +148,10 @@ terminal-workspace/
 │   ├── pnx-green-dark.omp.json
 │   └── pnx-green-nordic.omp.json
 ├── tests/
-│   ├── common.tests.ps1          # Pester tests for shared helpers
-│   └── profile.tests.ps1         # Pester tests for profile functions
-├── scripts/
-    ├── common.ps1                # Shared helpers (WT path, font, cache, pnx markers)
+│   ├── common.tests.ps1          # Pester 5 tests for shared helpers (23 tests)
+│   └── profile.tests.ps1         # Pester 5 tests for profile functions (13 tests)
+└── scripts/
+    ├── common.ps1                # Shared helpers (WT path, font, cache, markers, atomic writes)
     ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
@@ -249,7 +249,7 @@ Update-Tools                      # Update everything (winget + scoop + modules 
 Update-Tools -Force               # Update without confirmation prompt
 Update-Workspace                  # Git pull + redeploy configs + reload profile
 Test-ThemeIntegrity               # Verify ThemeDB, OMP files, and WT schemes are in sync
-Invoke-Pester ./tests/ -Output Detailed  # Run Pester test suite
+Invoke-Pester ./tests/ -Output Detailed  # Run test suite (requires Pester 5+)
 ```
 
 ### Sync Between Machines
