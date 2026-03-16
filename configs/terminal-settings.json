@@ -588,10 +588,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -608,10 +608,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -628,10 +628,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -648,10 +648,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -668,10 +668,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -688,10 +688,10 @@
       },
       "window": {
         "applicationTheme": "light",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -708,10 +708,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -728,10 +728,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -748,10 +748,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -768,10 +768,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -788,10 +788,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -808,10 +808,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     },
     {
@@ -828,10 +828,10 @@
       },
       "window": {
         "applicationTheme": "dark",
-        "experimental.rainbowFrame": false,
+        "useMica": false,
         "frame": null,
         "unfocusedFrame": null,
-        "useMica": false
+        "experimental.rainbowFrame": false
       }
     }
   ]

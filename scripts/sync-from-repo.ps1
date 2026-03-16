@@ -41,16 +41,18 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
         Get-ChildItem (Split-Path $WtSettingsLocal -Parent) -Filter "settings.json.backup-*" |
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
-    Copy-Item $repoWt $WtSettingsLocal -Force
-    # Post-deploy: inject pnx markers + fix font name (delegated to common.ps1)
+    # Atomic deploy: read repo JSON, inject markers, write via Save-WtSettings
     try {
-        $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
-        if (Initialize-WtPnxMarkers -WtJson $wtJson) {
-            $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
+        $wtJson = Get-Content $repoWt -Raw | ConvertFrom-Json
+        Initialize-WtPnxMarkers -WtJson $wtJson | Out-Null
+        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal)) {
+            Write-Host "  WT Settings      WARNING: atomic write failed, falling back to Copy-Item" -ForegroundColor Yellow
+            Copy-Item $repoWt $WtSettingsLocal -Force
         }
         Write-Host "  WT Settings      OK" -ForegroundColor Green
     } catch {
-        Write-Host "  WT Settings      WARNING: JSON marker processing failed: $_" -ForegroundColor Yellow
+        Write-Host "  WT Settings      WARNING: JSON processing failed: $_" -ForegroundColor Yellow
+        Copy-Item $repoWt $WtSettingsLocal -Force
     }
 } elseif (-not $WtSettingsLocal) {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red
