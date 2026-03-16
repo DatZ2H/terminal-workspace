@@ -42,30 +42,11 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
     Copy-Item $repoWt $WtSettingsLocal -Force
-    # Post-deploy: inject pnx markers + fix font name (same as bootstrap)
+    # Post-deploy: inject pnx markers + fix font name (delegated to common.ps1)
     try {
         $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
-        if ($wtJson.profiles.defaults) {
-            $d = $wtJson.profiles.defaults
-            $needsWrite = $false
-            if (-not $d.PSObject.Properties['pnxTheme']) {
-                $d | Add-Member -NotePropertyName pnxTheme -NotePropertyValue 'pro'
-                $needsWrite = $true
-            }
-            if (-not $d.PSObject.Properties['pnxStyle']) {
-                $d | Add-Member -NotePropertyName pnxStyle -NotePropertyValue 'mac'
-                $needsWrite = $true
-            }
-            if ($d.font -and $d.font.face) {
-                $fi = Get-NerdFontInfo
-                if ($fi.FontFace -and $d.font.face -ne $fi.FontFace) {
-                    $d.font.face = $fi.FontFace
-                    $needsWrite = $true
-                }
-            }
-            if ($needsWrite) {
-                $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
-            }
+        if (Initialize-WtPnxMarkers -WtJson $wtJson) {
+            $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
         }
         Write-Host "  WT Settings      OK" -ForegroundColor Green
     } catch {
@@ -86,6 +67,9 @@ if ($themeFiles) {
 } else {
     Write-Host "  Themes           NONE IN REPO" -ForegroundColor Red
 }
+
+# Clear init cache so next profile load regenerates from fresh configs
+if (Get-Command Clear-PnxCache -ErrorAction SilentlyContinue) { Clear-PnxCache }
 
 Write-Host ""
 Write-Host "  Restart terminal to apply changes." -ForegroundColor Yellow

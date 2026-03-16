@@ -119,6 +119,8 @@ OMP prompt always matches the active WT color scheme.
 | Theme auto-detection | Reads `pnxTheme`/`pnxStyle` markers from WT settings on profile load |
 | Nerd Font auto-repair | Detects v2/v3 font name and updates WT settings if mismatched |
 | Health check on load | Reports config issues (missing font, unreadable WT settings) at startup |
+| Custom theme persistence | User-created themes saved to `%LOCALAPPDATA%\pnx-terminal\themes.json`, merged into ThemeDB on load |
+| `-WhatIf` / `-Verbose` support | All public functions support common parameters via `[CmdletBinding()]` |
 
 ## File Structure
 
@@ -145,8 +147,11 @@ terminal-workspace/
 │   ├── pnx-fl0.omp.json
 │   ├── pnx-green-dark.omp.json
 │   └── pnx-green-nordic.omp.json
-└── scripts/
-    ├── common.ps1                # Shared helpers (WT path detection, font info, constants)
+├── tests/
+│   ├── common.tests.ps1          # Pester tests for shared helpers
+│   └── profile.tests.ps1         # Pester tests for profile functions
+├── scripts/
+    ├── common.ps1                # Shared helpers (WT path, font, cache, pnx markers)
     ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
@@ -169,7 +174,20 @@ Set-Style                         # Show current style
 Test-ThemeIntegrity               # Check ThemeDB vs OMP files vs WT schemes
 ```
 
-Tab completion is available for `Set-Theme` and `Set-Style` parameters.
+Tab completion is available for `Set-Theme`, `Set-Style`, `New-PnxTheme`, and `Remove-PnxTheme` parameters.
+
+### Custom Themes
+
+```powershell
+New-PnxTheme -Name mytheme -BasedOn pro                  # Create custom theme from existing
+New-PnxTheme -Name ocean -BasedOn nord -Background "#1a2b3c"  # Custom with background color
+New-PnxTheme -Name test -BasedOn pro -WhatIf             # Preview without creating
+Remove-PnxTheme mytheme                                   # Remove custom theme + OMP file
+Remove-PnxTheme mytheme -WhatIf                           # Preview removal
+```
+
+Custom themes persist across restarts (stored in `%LOCALAPPDATA%\pnx-terminal\themes.json`).
+Tab completion available for `New-PnxTheme -BasedOn` and `Remove-PnxTheme -Name`.
 
 ### Directory Navigation (zoxide)
 
@@ -231,6 +249,7 @@ Update-Tools                      # Update everything (winget + scoop + modules 
 Update-Tools -Force               # Update without confirmation prompt
 Update-Workspace                  # Git pull + redeploy configs + reload profile
 Test-ThemeIntegrity               # Verify ThemeDB, OMP files, and WT schemes are in sync
+Invoke-Pester ./tests/ -Output Detailed  # Run Pester test suite
 ```
 
 ### Sync Between Machines

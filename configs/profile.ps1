@@ -32,14 +32,34 @@ $ThemeDB = @{
     greennord  = @{ omp = "$PnxThemes\pnx-green-nordic.omp.json";   scheme = "Green Nordic";           wtTheme = "PNX Green Nordic"     }
 }
 
+# ===== Health Check (collect issues, report once at end) =====
+$_healthIssues = @()
+
+# Merge user-created themes from registry (survives restart)
+$_themeRegistry = Join-Path $env:LOCALAPPDATA "pnx-terminal\themes.json"
+if (Test-Path $_themeRegistry) {
+    try {
+        $custom = Get-Content $_themeRegistry -Raw | ConvertFrom-Json
+        foreach ($prop in $custom.PSObject.Properties) {
+            if (-not $ThemeDB.ContainsKey($prop.Name)) {
+                $ThemeDB[$prop.Name] = @{
+                    omp     = $prop.Value.omp
+                    scheme  = $prop.Value.scheme
+                    wtTheme = $prop.Value.wtTheme
+                }
+            }
+        }
+    } catch {
+        $_healthIssues += "Theme registry corrupt — custom themes not loaded. Delete $(Join-Path $env:LOCALAPPDATA 'pnx-terminal\themes.json') to fix."
+    }
+}
+Remove-Variable _themeRegistry -ErrorAction SilentlyContinue
+
 $StyleDB = @{
     mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 70  }
     win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 90  }
     linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
 }
-
-# ===== Health Check (collect issues, report once at end) =====
-$_healthIssues = @()
 
 # ===== Detect Current Theme & Style from WT Settings =====
 $Global:PnxCurrentTheme = "pro"
@@ -83,40 +103,78 @@ if ($WtSettingsPath) {
                 if ($bestMatch -and $bestScore -ge 2) { $Global:PnxCurrentStyle = $bestMatch }
             }
         }
-        Remove-Variable _wtJson, _defaults -ErrorAction SilentlyContinue
+        Remove-Variable _defaults -ErrorAction SilentlyContinue
     } catch {
         $_healthIssues += "WT settings.json unreadable — theme/style detection skipped"
     }
 }
 
-# ===== Oh My Posh (init with detected theme) =====
+# ===== Oh My Posh (init with detected theme — cached) =====
 $_ompConfig = $ThemeDB[$Global:PnxCurrentTheme].omp
 if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
     $_healthIssues += "Oh My Posh not found — run:  winget install JanDeDobbeleer.OhMyPosh"
 } elseif (-not (Test-Path $_ompConfig)) {
     $_healthIssues += "OMP theme file missing — run:  Update-Workspace"
-    # Try fallback to any available PNX theme
     $_fallback = Get-ChildItem $PnxThemes -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($_fallback) { oh-my-posh init pwsh --config $_fallback.FullName | Invoke-Expression }
 } else {
-    oh-my-posh init pwsh --config $_ompConfig | Invoke-Expression
-}
-Remove-Variable _ompConfig, _fallback -ErrorAction SilentlyContinue
-
-# ===== Terminal Icons (auto-install if missing) =====
-if (Get-Module -ListAvailable -Name Terminal-Icons) {
-    Import-Module Terminal-Icons
-} else {
-    # Try auto-install silently (ensure NuGet provider + PSGallery trust first)
-    try {
-        # Pre-install NuGet provider to avoid interactive prompt that blocks terminal startup
-        if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
-            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
+    $_ompExe = (Get-Command oh-my-posh).Source
+    $_ompVer = (Get-Item $_ompExe).LastWriteTimeUtc.Ticks.ToString()
+    $_ompCfgTicks = (Get-Item $_ompConfig).LastWriteTimeUtc.Ticks.ToString()
+    $_ompExtra = "$($Global:PnxCurrentTheme)|$_ompCfgTicks"
+    $_ompCached = if (Get-Command Get-PnxCachedInit -ErrorAction SilentlyContinue) {
+        Get-PnxCachedInit -Name 'omp' -VersionKey $_ompVer -ExtraKey $_ompExtra
+    } else { $null }
+    if ($_ompCached) {
+        try { $_ompCached | Invoke-Expression } catch {
+            # Corrupt cache — regenerate
+            Remove-Item (Join-Path $PnxCacheDir "omp.*") -Force -ErrorAction SilentlyContinue
+            $_ompInit = oh-my-posh init pwsh --config $_ompConfig | Out-String
+            $_ompInit | Invoke-Expression
+            if (Get-Command Save-PnxCachedInit -ErrorAction SilentlyContinue) {
+                Save-PnxCachedInit -Name 'omp' -VersionKey $_ompVer -ExtraKey $_ompExtra -Content $_ompInit
+            }
         }
-        Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
-        Import-Module Terminal-Icons
-    } catch {
-        $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
+    } else {
+        $_ompInit = oh-my-posh init pwsh --config $_ompConfig | Out-String
+        $_ompInit | Invoke-Expression
+        if (Get-Command Save-PnxCachedInit -ErrorAction SilentlyContinue) {
+            Save-PnxCachedInit -Name 'omp' -VersionKey $_ompVer -ExtraKey $_ompExtra -Content $_ompInit
+        }
+    }
+}
+Remove-Variable _ompConfig, _fallback, _ompExe, _ompVer, _ompCfgTicks, _ompExtra, _ompCached, _ompInit -ErrorAction SilentlyContinue
+
+# ===== Terminal Icons (lazy-load on idle for fast startup) =====
+if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
+    # PS 7.3+: defer import to after first prompt renders (~200ms saved from startup)
+    Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
+        try { Import-Module Terminal-Icons -ErrorAction Stop } catch {
+            try {
+                if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
+                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
+                }
+                Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
+                Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+            } catch {
+                Write-Warning "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
+            }
+        }
+    } | Out-Null
+} else {
+    # PS < 7.3: import directly (no OnIdle event available)
+    try { Import-Module Terminal-Icons -ErrorAction Stop } catch {
+        try {
+            if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+                Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
+                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
+            }
+            Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
+            Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+        } catch {
+            $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
+        }
     }
 }
 
@@ -134,42 +192,67 @@ if (-not $_fontInfo -or -not $_fontInfo.Installed) {
         $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
     }
 }
-Remove-Variable _fontInfo -ErrorAction SilentlyContinue
-
 # ===== Auto-fix WT font face if using stale v2/v3 name =====
 if (Get-Command Repair-WtFontFace -ErrorAction SilentlyContinue) {
-    try { Repair-WtFontFace -WtPath $WtSettingsPath | Out-Null } catch {
+    try {
+        Repair-WtFontFace -WtPath $WtSettingsPath -WtJson $_wtJson -FontInfo $_fontInfo | Out-Null
+    } catch {
         $_healthIssues += "WT font face repair failed: $_"
     }
 }
+Remove-Variable _wtJson, _fontInfo -ErrorAction SilentlyContinue
 
-# ===== Zoxide =====
+# ===== Zoxide (cached init) =====
 if (Get-Command zoxide -ErrorAction SilentlyContinue) {
-    zoxide init powershell | Out-String | Invoke-Expression
+    $_zoxExe = (Get-Command zoxide).Source
+    $_zoxVer = (Get-Item $_zoxExe).LastWriteTimeUtc.Ticks.ToString()
+    $_zoxCached = if (Get-Command Get-PnxCachedInit -ErrorAction SilentlyContinue) {
+        Get-PnxCachedInit -Name 'zoxide' -VersionKey $_zoxVer -ExtraKey ''
+    } else { $null }
+    if ($_zoxCached) {
+        try { $_zoxCached | Invoke-Expression } catch {
+            Remove-Item (Join-Path $PnxCacheDir "zoxide.*") -Force -ErrorAction SilentlyContinue
+            $_zoxInit = zoxide init powershell | Out-String
+            $_zoxInit | Invoke-Expression
+            if (Get-Command Save-PnxCachedInit -ErrorAction SilentlyContinue) {
+                Save-PnxCachedInit -Name 'zoxide' -VersionKey $_zoxVer -ExtraKey '' -Content $_zoxInit
+            }
+        }
+    } else {
+        $_zoxInit = zoxide init powershell | Out-String
+        $_zoxInit | Invoke-Expression
+        if (Get-Command Save-PnxCachedInit -ErrorAction SilentlyContinue) {
+            Save-PnxCachedInit -Name 'zoxide' -VersionKey $_zoxVer -ExtraKey '' -Content $_zoxInit
+        }
+    }
+    Remove-Variable _zoxExe, _zoxVer, _zoxCached, _zoxInit -ErrorAction SilentlyContinue
 }
 
 # ===== Encoding (Vietnamese support) =====
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-# ===== PSReadLine =====
+# ===== PSReadLine (batched for fewer calls) =====
+$_pslOpts = @{
+    EditMode                      = 'Windows'
+    BellStyle                     = 'None'
+    MaximumHistoryCount           = 10000
+    HistoryNoDuplicates           = $true
+    HistorySearchCursorMovesToEnd = $true
+    ShowToolTips                  = $true
+}
 $_pslVersion = (Get-Module PSReadLine -ErrorAction SilentlyContinue).Version
 if ($_pslVersion -and $_pslVersion -ge [Version]"2.2.0") {
-    Set-PSReadLineOption -PredictionSource History
-    Set-PSReadLineOption -PredictionViewStyle ListView
+    $_pslOpts['PredictionSource']    = 'History'
+    $_pslOpts['PredictionViewStyle'] = 'ListView'
 }
-Set-PSReadLineOption -EditMode Windows
-Set-PSReadLineOption -BellStyle None
-Set-PSReadLineOption -MaximumHistoryCount 10000
-Set-PSReadLineOption -HistoryNoDuplicates:$true
-Set-PSReadLineOption -HistorySearchCursorMovesToEnd:$true
-Set-PSReadLineOption -ShowToolTips:$true
+Set-PSReadLineOption @_pslOpts
 Set-PSReadLineKeyHandler -Key Ctrl+d -Function DeleteCharOrExit
 Set-PSReadLineKeyHandler -Key Ctrl+z -Function Undo
 Set-PSReadLineKeyHandler -Key Ctrl+w -Function BackwardDeleteWord
 Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-Remove-Variable _pslVersion -ErrorAction SilentlyContinue
+Remove-Variable _pslOpts, _pslVersion -ErrorAction SilentlyContinue
 
 # ===== Report health issues (once, non-intrusive) =====
 if ($_healthIssues.Count -gt 0) {
@@ -210,9 +293,23 @@ Register-ArgumentCompleter -CommandName New-PnxTheme -ParameterName BasedOn -Scr
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $ThemeDB[$_].scheme)
     }
 }.GetNewClosure()
+Register-ArgumentCompleter -CommandName Remove-PnxTheme -ParameterName Name -ScriptBlock {
+    param($cmd, $param, $word)
+    $regPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\themes.json"
+    if (Test-Path $regPath) {
+        try {
+            $reg = Get-Content $regPath -Raw | ConvertFrom-Json
+            $reg.PSObject.Properties.Name | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Custom theme: $_")
+            }
+        } catch {}
+    }
+}
 
 # ===== Theme List Display =====
 function Get-ThemeList {
+    [CmdletBinding()]
+    param()
     $sorted = $ThemeDB.Keys | Sort-Object
     $count  = $sorted.Count
     Write-Host ""
@@ -234,6 +331,7 @@ function Get-ThemeList {
 
 # ===== Theme Integrity Validation =====
 function Test-ThemeIntegrity {
+    [CmdletBinding()]
     param([switch]$Quiet)
 
     # Read WT settings for scheme/theme validation
@@ -312,6 +410,7 @@ function Test-ThemeIntegrity {
 
 # ===== Theme Scaffolding =====
 function New-PnxTheme {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$BasedOn,
@@ -348,6 +447,7 @@ function New-PnxTheme {
         # Replace only the first background color (palette/global), preserve per-segment colors
         $ompContent = ([regex]'"background"\s*:\s*"#[0-9a-fA-F]{3,8}"').Replace($ompContent, "`"background`": `"$Background`"", 1)
     }
+    if (-not $PSCmdlet.ShouldProcess($newOmp, "Create OMP theme file")) { return }
     $ompContent | Set-Content $newOmp -Encoding utf8NoBOM
 
     # 2. Clone color scheme in WT settings
@@ -400,7 +500,21 @@ function New-PnxTheme {
     # 4. Add to runtime ThemeDB
     $ThemeDB[$Name] = @{ omp = $newOmp; scheme = $displayName; wtTheme = $wtThemeName }
 
-    # 5. Summary
+    # 5. Persist to registry so theme survives restart
+    $regPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\themes.json"
+    $regDir = Split-Path $regPath -Parent
+    if (-not (Test-Path $regDir)) { New-Item -ItemType Directory -Path $regDir -Force | Out-Null }
+    $registry = if (Test-Path $regPath) {
+        try { Get-Content $regPath -Raw | ConvertFrom-Json } catch { [PSCustomObject]@{} }
+    } else { [PSCustomObject]@{} }
+    $registry | Add-Member -NotePropertyName $Name -NotePropertyValue ([PSCustomObject]@{
+        omp     = $newOmp
+        scheme  = $displayName
+        wtTheme = $wtThemeName
+    }) -Force
+    $registry | ConvertTo-Json -Depth 10 | Set-Content $regPath -Encoding utf8NoBOM
+
+    # 6. Summary
     Write-Host ""
     Write-Host "  Created theme: $Name (based on $BasedOn)" -ForegroundColor Green
     $line = [string]::new([char]0x2500, 37)
@@ -415,8 +529,46 @@ function New-PnxTheme {
     Write-Host ""
 }
 
+# ===== Remove Custom Theme =====
+function Remove-PnxTheme {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory, Position=0)][string]$Name)
+
+    $regPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\themes.json"
+    if (-not (Test-Path $regPath)) {
+        Write-Host "  No custom themes registered." -ForegroundColor Yellow
+        return
+    }
+    try {
+        $registry = Get-Content $regPath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Warning "Custom theme registry unreadable ($regPath) — skipped."
+        return
+    }
+    if (-not $registry.PSObject.Properties[$Name]) {
+        Write-Host "  '$Name' is not a custom theme (only custom themes can be removed)." -ForegroundColor Yellow
+        return
+    }
+    if (-not $PSCmdlet.ShouldProcess($Name, "Remove custom theme")) { return }
+
+    # Remove OMP file
+    $entry = $registry.$Name
+    if ($entry.omp -and (Test-Path $entry.omp)) { Remove-Item $entry.omp -Force }
+
+    # Remove from registry
+    $registry.PSObject.Properties.Remove($Name)
+    $registry | ConvertTo-Json -Depth 10 | Set-Content $regPath -Encoding utf8NoBOM
+
+    # Remove from runtime ThemeDB
+    if ($ThemeDB.ContainsKey($Name)) { $ThemeDB.Remove($Name) }
+
+    Write-Host "  Removed theme: $Name" -ForegroundColor Green
+}
+
 # ===== Interactive Theme Selector =====
 function Select-ThemeInteractive {
+    [CmdletBinding()]
+    param()
     $esc = [char]27
     $sorted = $ThemeDB.Keys | Sort-Object
     if ($sorted.Count -eq 0) { return $null }
@@ -506,6 +658,7 @@ function Select-ThemeInteractive {
 
 # ===== Unified Theme Switcher =====
 function Set-Theme {
+    [CmdletBinding()]
     param(
         [Parameter(Position=0)][string]$Theme,
         [Parameter(Position=1)][string]$Style
@@ -538,12 +691,20 @@ function Set-Theme {
     $t = $ThemeDB[$Theme]
     $s = $StyleDB[$Style]
 
-    # 1. Switch OMP prompt
+    # 1. Switch OMP prompt (and update cache)
     if (-not (Test-Path $t.omp)) {
         Write-Host "  Theme file not found: $($t.omp)" -ForegroundColor Red
         return
     }
-    oh-my-posh init pwsh --config $t.omp | Invoke-Expression
+    $_stInit = oh-my-posh init pwsh --config $t.omp | Out-String
+    $_stInit | Invoke-Expression
+    if (Get-Command Save-PnxCachedInit -ErrorAction SilentlyContinue) {
+        $_stExe = (Get-Command oh-my-posh).Source
+        $_stVer = (Get-Item $_stExe).LastWriteTimeUtc.Ticks.ToString()
+        $_stCfgTicks = (Get-Item $t.omp).LastWriteTimeUtc.Ticks.ToString()
+        Save-PnxCachedInit -Name 'omp' -VersionKey $_stVer -ExtraKey "$Theme|$_stCfgTicks" -Content $_stInit
+        Remove-Variable _stInit, _stExe, _stVer, _stCfgTicks -ErrorAction SilentlyContinue
+    }
 
     # 2. Update Windows Terminal settings
     if (-not $WtSettingsPath) {
@@ -620,6 +781,7 @@ function Set-Theme {
 }
 
 function Set-Style {
+    [CmdletBinding()]
     param([Parameter(Position=0)][string]$Style)
     if (-not $Style) {
         Write-Host "  Current: $Global:PnxCurrentStyle" -ForegroundColor Cyan
@@ -631,12 +793,15 @@ function Set-Style {
 
 # ===== Maintenance Functions (delegate to standalone scripts) =====
 function Update-Tools {
+    [CmdletBinding()]
+    param()
     $script = "$env:PNX_TERMINAL_REPO\scripts\update-tools.ps1"
     if (Test-Path $script) { & $script @args }
     else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
 }
 
 function Sync-Config {
+    [CmdletBinding()]
     param(
         [Parameter(Position=0)][ValidateSet('push','pull')][string]$Direction,
         [switch]$Force
@@ -660,7 +825,7 @@ function Sync-Config {
         & "$repo\scripts\sync-to-repo.ps1" -Force:$Force
     }
     elseif ($Direction -eq 'pull') {
-        & "$repo\scripts\sync-from-repo.ps1"
+        & "$repo\scripts\sync-from-repo.ps1"   # sync-from-repo.ps1 already calls Clear-PnxCache
         Write-Host "  Reloading profile..." -ForegroundColor Cyan
         . $PROFILE
     }
@@ -668,12 +833,16 @@ function Sync-Config {
 }
 
 function Get-Status {
+    [CmdletBinding()]
+    param()
     $script = "$env:PNX_TERMINAL_REPO\scripts\status.ps1"
     if (Test-Path $script) { & $script }
     else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
 }
 
 function Update-Workspace {
+    [CmdletBinding()]
+    param()
     $repo = $env:PNX_TERMINAL_REPO
     if (-not $repo -or -not (Test-Path $repo)) {
         Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red
@@ -706,7 +875,7 @@ function Update-Workspace {
     Write-Host "`n  Re-deploying configs..." -ForegroundColor Cyan
     & "$repo\scripts\sync-from-repo.ps1"
 
-    # 3. Reload profile
+    # 3. Reload profile (sync-from-repo.ps1 already cleared init cache)
     Write-Host "`n  Reloading profile..." -ForegroundColor Cyan
     . $PROFILE
     Write-Host "  Done. Workspace updated." -ForegroundColor Green
