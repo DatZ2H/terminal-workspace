@@ -131,7 +131,8 @@ terminal-workspace/
 ├── update.ps1                    # Standalone updater (git pull + redeploy + reload)
 ├── configs/
 │   ├── profile.ps1               # PowerShell profile (source of truth)
-│   └── terminal-settings.json    # Windows Terminal settings
+│   ├── themes.json               # Theme & style definitions (ThemeDB + StyleDB + defaults)
+│   └── terminal-settings.json    # Windows Terminal settings (schemes + WT themes)
 ├── themes/
 │   ├── pnx-dracula-pro.omp.json
 │   ├── pnx-dracula.omp.json
@@ -148,8 +149,8 @@ terminal-workspace/
 │   ├── pnx-green-dark.omp.json
 │   └── pnx-green-nordic.omp.json
 ├── tests/
-│   ├── common.tests.ps1          # Pester 5 tests for shared helpers (23 tests)
-│   └── profile.tests.ps1         # Pester 5 tests for profile functions (13 tests)
+│   ├── common.tests.ps1          # Pester 5 tests for shared helpers
+│   └── profile.tests.ps1         # Pester 5 tests for profile functions
 └── scripts/
     ├── common.ps1                # Shared helpers (WT path, font, cache, markers, atomic writes)
     ├── install-tools.ps1         # Install winget + scoop packages
@@ -383,6 +384,12 @@ pip install claude-code-vietnamese-fix
 claude-vn-fix
 # Re-run after each Claude Code update
 ```
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — system design, data flow, caching, error handling
+- [Developer Guide](docs/developer-guide.md) — how to add themes/styles, code patterns, testing
+- [Script Reference](docs/script-reference.md) — all scripts, functions, and parameters
 
 ## License
 
