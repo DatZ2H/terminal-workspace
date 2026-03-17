@@ -1,0 +1,25 @@
+{
+  "defaultTheme": "pro",
+  "defaultStyle": "mac",
+  "themes": {
+    "pro":        { "omp": "pnx-dracula-pro.omp.json",     "scheme": "Dracula Pro",             "wtTheme": "PNX Dracula Pro" },
+    "dracula":    { "omp": "pnx-dracula.omp.json",         "scheme": "Dracula",                 "wtTheme": "PNX Dracula" },
+    "tokyo":      { "omp": "pnx-tokyo-storm.omp.json",     "scheme": "Tokyo Night Storm",       "wtTheme": "PNX Tokyo Night" },
+    "mocha":      { "omp": "pnx-mocha.omp.json",           "scheme": "Catppuccin Mocha",        "wtTheme": "PNX Mocha" },
+    "nord":       { "omp": "pnx-nord.omp.json",            "scheme": "Nord",                    "wtTheme": "PNX Nord" },
+    "seagreen":   { "omp": "pnx-dark-sea-green.omp.json",  "scheme": "Dark Sea Green",          "wtTheme": "PNX Dark Sea Green" },
+    "organic":    { "omp": "pnx-organic-green.omp.json",   "scheme": "Organic Green",           "wtTheme": "PNX Organic Green" },
+    "nihileaf":   { "omp": "pnx-nihileaf.omp.json",        "scheme": "Nihileaf",                "wtTheme": "PNX Nihileaf" },
+    "miasma":     { "omp": "pnx-miasma.omp.json",          "scheme": "Miasma",                  "wtTheme": "PNX Miasma" },
+    "jake":       { "omp": "pnx-jake-green-grey.omp.json", "scheme": "Jake Green Grey",         "wtTheme": "PNX Jake Green Grey" },
+    "kryptonite": { "omp": "pnx-kryptonite.omp.json",      "scheme": "Kryptonite",              "wtTheme": "PNX Kryptonite" },
+    "fl0":        { "omp": "pnx-fl0.omp.json",             "scheme": "fl0-c0d3",                "wtTheme": "PNX fl0-c0d3" },
+    "greendark":  { "omp": "pnx-green-dark.omp.json",      "scheme": "Green Dark Supercharged", "wtTheme": "PNX Green Dark" },
+    "greennord":  { "omp": "pnx-green-nordic.omp.json",    "scheme": "Green Nordic",            "wtTheme": "PNX Green Nordic" }
+  },
+  "styles": {
+    "mac":   { "opacity": 85,  "useAcrylic": true,  "useMica": false, "padding": "16, 12, 16, 12", "cursorShape": "bar",       "scrollbarState": "visible", "unfocusedOpacity": 70 },
+    "win":   { "opacity": 95,  "useAcrylic": false, "useMica": true,  "padding": "8, 8, 8, 8",     "cursorShape": "bar",       "scrollbarState": "visible", "unfocusedOpacity": 90 },
+    "linux": { "opacity": 100, "useAcrylic": false, "useMica": false, "padding": "4, 4, 4, 4",     "cursorShape": "filledBox", "scrollbarState": "visible", "unfocusedOpacity": 100 }
+  }
+}

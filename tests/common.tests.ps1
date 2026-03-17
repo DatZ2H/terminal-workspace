@@ -114,6 +114,21 @@ Describe "Get-PnxCachedInit / Save-PnxCachedInit / Clear-PnxCache" {
 }
 
 Describe "Initialize-WtPnxMarkers" {
+    It "Reads defaults from manifest file" {
+        $manifestPath = Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
+        Test-Path $manifestPath | Should -BeTrue
+        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        # The defaults loaded by common.ps1 should match the manifest
+        $json = [PSCustomObject]@{
+            profiles = [PSCustomObject]@{
+                defaults = [PSCustomObject]@{}
+            }
+        }
+        Initialize-WtPnxMarkers -WtJson $json | Out-Null
+        $json.profiles.defaults.pnxTheme | Should -Be $manifest.defaultTheme
+        $json.profiles.defaults.pnxStyle | Should -Be $manifest.defaultStyle
+    }
+
     It "Adds pnxTheme when missing" {
         $json = [PSCustomObject]@{
             profiles = [PSCustomObject]@{

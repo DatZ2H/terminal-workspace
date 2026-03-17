@@ -12,24 +12,27 @@ if ($_commonScript -and (Test-Path $_commonScript)) {
 }
 Remove-Variable _commonScript -ErrorAction SilentlyContinue
 
-# ===== Theme & Style Database =====
+# ===== Load Theme & Style config from manifest =====
+$_pnxManifest = $null
+if ($env:PNX_TERMINAL_REPO) {
+    $_manifestPath = "$env:PNX_TERMINAL_REPO\configs\themes.json"
+    if (Test-Path $_manifestPath) {
+        try { $_pnxManifest = Get-Content $_manifestPath -Raw | ConvertFrom-Json } catch {}
+    }
+}
+
 $PnxThemes = if ($env:PNX_OMP_THEMES) { $env:PNX_OMP_THEMES } else { "$env:USERPROFILE\.oh-my-posh\themes" }
 
-$ThemeDB = @{
-    pro        = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json";    scheme = "Dracula Pro";            wtTheme = "PNX Dracula Pro"      }
-    dracula    = @{ omp = "$PnxThemes\pnx-dracula.omp.json";        scheme = "Dracula";                wtTheme = "PNX Dracula"          }
-    tokyo      = @{ omp = "$PnxThemes\pnx-tokyo-storm.omp.json";    scheme = "Tokyo Night Storm";      wtTheme = "PNX Tokyo Night"      }
-    mocha      = @{ omp = "$PnxThemes\pnx-mocha.omp.json";          scheme = "Catppuccin Mocha";       wtTheme = "PNX Mocha"            }
-    nord       = @{ omp = "$PnxThemes\pnx-nord.omp.json";           scheme = "Nord";                   wtTheme = "PNX Nord"             }
-    seagreen   = @{ omp = "$PnxThemes\pnx-dark-sea-green.omp.json"; scheme = "Dark Sea Green";         wtTheme = "PNX Dark Sea Green"   }
-    organic    = @{ omp = "$PnxThemes\pnx-organic-green.omp.json";  scheme = "Organic Green";          wtTheme = "PNX Organic Green"    }
-    nihileaf   = @{ omp = "$PnxThemes\pnx-nihileaf.omp.json";       scheme = "Nihileaf";               wtTheme = "PNX Nihileaf"         }
-    miasma     = @{ omp = "$PnxThemes\pnx-miasma.omp.json";         scheme = "Miasma";                 wtTheme = "PNX Miasma"           }
-    jake       = @{ omp = "$PnxThemes\pnx-jake-green-grey.omp.json";scheme = "Jake Green Grey";        wtTheme = "PNX Jake Green Grey"  }
-    kryptonite = @{ omp = "$PnxThemes\pnx-kryptonite.omp.json";     scheme = "Kryptonite";             wtTheme = "PNX Kryptonite"       }
-    fl0        = @{ omp = "$PnxThemes\pnx-fl0.omp.json";            scheme = "fl0-c0d3";               wtTheme = "PNX fl0-c0d3"         }
-    greendark  = @{ omp = "$PnxThemes\pnx-green-dark.omp.json";     scheme = "Green Dark Supercharged";wtTheme = "PNX Green Dark"       }
-    greennord  = @{ omp = "$PnxThemes\pnx-green-nordic.omp.json";   scheme = "Green Nordic";           wtTheme = "PNX Green Nordic"     }
+# Build ThemeDB from manifest
+$ThemeDB = @{}
+if ($_pnxManifest -and $_pnxManifest.themes) {
+    foreach ($p in $_pnxManifest.themes.PSObject.Properties) {
+        $ThemeDB[$p.Name] = @{
+            omp     = "$PnxThemes\$($p.Value.omp)"
+            scheme  = $p.Value.scheme
+            wtTheme = $p.Value.wtTheme
+        }
+    }
 }
 
 # ===== Health Check (collect issues, report once at end) =====
@@ -55,15 +58,42 @@ if (Test-Path $_themeRegistry) {
 }
 Remove-Variable _themeRegistry -ErrorAction SilentlyContinue
 
-$StyleDB = @{
-    mac   = @{ opacity = 85;  useAcrylic = $true;  useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 70  }
-    win   = @{ opacity = 95;  useAcrylic = $false; useMica = $true;  padding = "8, 8, 8, 8";     cursorShape = "bar";       scrollbarState = "visible"; unfocusedOpacity = 90  }
-    linux = @{ opacity = 100; useAcrylic = $false; useMica = $false; padding = "4, 4, 4, 4";     cursorShape = "filledBox"; scrollbarState = "visible"; unfocusedOpacity = 100 }
+# Build StyleDB from manifest
+$StyleDB = @{}
+if ($_pnxManifest -and $_pnxManifest.styles) {
+    foreach ($p in $_pnxManifest.styles.PSObject.Properties) {
+        $StyleDB[$p.Name] = @{
+            opacity          = [int]$p.Value.opacity
+            useAcrylic       = [bool]$p.Value.useAcrylic
+            useMica          = [bool]$p.Value.useMica
+            padding          = $p.Value.padding
+            cursorShape      = $p.Value.cursorShape
+            scrollbarState   = $p.Value.scrollbarState
+            unfocusedOpacity = [int]$p.Value.unfocusedOpacity
+        }
+    }
 }
 
+# Fallback: if manifest didn't load (first boot before bootstrap)
+if ($ThemeDB.Count -eq 0) {
+    $ThemeDB = @{
+        pro = @{ omp = "$PnxThemes\pnx-dracula-pro.omp.json"; scheme = "Dracula Pro"; wtTheme = "PNX Dracula Pro" }
+    }
+}
+if ($StyleDB.Count -eq 0) {
+    $StyleDB = @{
+        mac = @{ opacity = 85; useAcrylic = $true; useMica = $false; padding = "16, 12, 16, 12"; cursorShape = "bar"; scrollbarState = "visible"; unfocusedOpacity = 70 }
+    }
+}
+
+# Read defaults from manifest (single source of truth)
+$_defaultTheme = if ($_pnxManifest.defaultTheme) { $_pnxManifest.defaultTheme } else { 'pro' }
+$_defaultStyle = if ($_pnxManifest.defaultStyle) { $_pnxManifest.defaultStyle } else { 'mac' }
+Remove-Variable _pnxManifest, _manifestPath -ErrorAction SilentlyContinue
+
 # ===== Detect Current Theme & Style from WT Settings =====
-$Global:PnxCurrentTheme = "pro"
-$Global:PnxCurrentStyle = "mac"
+$Global:PnxCurrentTheme = $_defaultTheme
+$Global:PnxCurrentStyle = $_defaultStyle
 
 if ($WtSettingsPath) {
     try {
@@ -76,7 +106,7 @@ if ($WtSettingsPath) {
                 $markerScheme = $ThemeDB[$_defaults.pnxTheme].scheme
                 if ($_defaults.colorScheme -and $markerScheme -ne $_defaults.colorScheme) {
                     # Marker stale — colorScheme was changed outside Set-Theme, fallback to heuristic
-                    $Global:PnxCurrentTheme = "pro"
+                    $Global:PnxCurrentTheme = $_defaultTheme
                     foreach ($k in $ThemeDB.Keys) {
                         if ($ThemeDB[$k].scheme -eq $_defaults.colorScheme) { $Global:PnxCurrentTheme = $k; break }
                     }

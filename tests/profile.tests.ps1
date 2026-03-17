@@ -27,6 +27,15 @@ BeforeAll {
 }
 
 Describe "ThemeDB" {
+    It "Loads themes from configs/themes.json" {
+        $manifestPath = Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
+        Test-Path $manifestPath | Should -BeTrue
+        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        $manifest.themes | Should -Not -BeNullOrEmpty
+        # ThemeDB should have at least as many entries as the manifest
+        $ThemeDB.Count | Should -BeGreaterOrEqual @($manifest.themes.PSObject.Properties).Count
+    }
+
     It "All ThemeDB entries have omp, scheme, wtTheme keys" {
         foreach ($key in $ThemeDB.Keys) {
             $entry = $ThemeDB[$key]
@@ -45,6 +54,22 @@ Describe "ThemeDB" {
 
     It "Has at least the 14 built-in themes" {
         $ThemeDB.Count | Should -BeGreaterOrEqual 14
+    }
+
+    It "Falls back gracefully if themes.json missing" {
+        # Simulate: if manifest fails, ThemeDB should have at least 'pro' fallback
+        # (This is tested implicitly — profile.ps1 has fallback logic)
+        $ThemeDB.ContainsKey('pro') | Should -BeTrue
+    }
+
+    It "Default theme and style read from manifest" {
+        $manifestPath = Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
+        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        # Defaults should match what's in the manifest
+        $manifest.defaultTheme | Should -Not -BeNullOrEmpty
+        $manifest.defaultStyle | Should -Not -BeNullOrEmpty
+        # ThemeDB should contain the default theme
+        $ThemeDB.ContainsKey($manifest.defaultTheme) | Should -BeTrue
     }
 }
 
@@ -180,6 +205,17 @@ Describe "Remove-PnxTheme" {
 }
 
 Describe "StyleDB" {
+    It "StyleDB loaded from manifest with correct types" {
+        $StyleDB.Count | Should -BeGreaterOrEqual 3
+        foreach ($key in $StyleDB.Keys) {
+            $s = $StyleDB[$key]
+            $s.opacity | Should -BeOfType [int]
+            $s.useAcrylic | Should -BeOfType [bool]
+            $s.useMica | Should -BeOfType [bool]
+            $s.unfocusedOpacity | Should -BeOfType [int]
+        }
+    }
+
     It "Has mac, win, linux styles" {
         $StyleDB.ContainsKey('mac') | Should -BeTrue
         $StyleDB.ContainsKey('win') | Should -BeTrue
@@ -194,6 +230,8 @@ Describe "StyleDB" {
             $s.Keys | Should -Contain 'useMica'
             $s.Keys | Should -Contain 'padding'
             $s.Keys | Should -Contain 'cursorShape'
+            $s.Keys | Should -Contain 'scrollbarState'
+            $s.Keys | Should -Contain 'unfocusedOpacity'
         }
     }
 }

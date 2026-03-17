@@ -161,6 +161,21 @@ function Clear-PnxCache {
     }
 }
 
+# -- Manifest Defaults (lazy loaded, used by Initialize-WtPnxMarkers) --
+$script:_pnxDefaults = @{ theme = 'pro'; style = 'mac' }  # fallback
+$_manifestPath = if ($PSScriptRoot) {
+    Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
+} else { $null }
+if ($_manifestPath -and (Test-Path $_manifestPath)) {
+    try {
+        $m = Get-Content $_manifestPath -Raw | ConvertFrom-Json
+        if ($m.defaultTheme) { $script:_pnxDefaults.theme = $m.defaultTheme }
+        if ($m.defaultStyle) { $script:_pnxDefaults.style = $m.defaultStyle }
+        Remove-Variable m -ErrorAction SilentlyContinue
+    } catch {}
+}
+Remove-Variable _manifestPath -ErrorAction SilentlyContinue
+
 # -- Deduplicated pnx marker injection (used by bootstrap + sync-from-repo) --
 # Ensures pnxTheme/pnxStyle markers exist in WT settings and fixes font face.
 # Returns $true if any changes were made (caller should write JSON back to disk).
@@ -168,8 +183,8 @@ function Initialize-WtPnxMarkers {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$WtJson,
-        [string]$DefaultTheme = 'pro',
-        [string]$DefaultStyle = 'mac'
+        [string]$DefaultTheme = $(if ($script:_pnxDefaults) { $script:_pnxDefaults.theme } else { 'pro' }),
+        [string]$DefaultStyle = $(if ($script:_pnxDefaults) { $script:_pnxDefaults.style } else { 'mac' })
     )
     $changed = $false
     if (-not $WtJson.profiles.defaults) {
