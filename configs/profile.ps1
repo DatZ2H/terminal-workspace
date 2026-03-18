@@ -872,12 +872,22 @@ function Update-Workspace {
     Write-Host "`n  Updating Terminal Workspace..." -ForegroundColor Cyan
     Write-Host "  ════════════════════════════════" -ForegroundColor DarkGray
 
-    # 1. Git pull
+    # 1. Git pull (with 15s timeout to avoid hanging on network issues)
     Write-Host "`n  Pulling latest changes..." -ForegroundColor Cyan
     $prevDir = Get-Location
     try {
         Set-Location $repo
-        $pullOutput = git pull 2>&1 | Out-String
+        $pullJob = Start-Job { git pull 2>&1 | Out-String }
+        $done = $pullJob | Wait-Job -Timeout 15
+        if ($done) {
+            $pullOutput = Receive-Job $pullJob
+        } else {
+            Stop-Job $pullJob
+            Remove-Job $pullJob -Force
+            Write-Host "  git pull timed out (15s). Check network or VPN." -ForegroundColor Red
+            return
+        }
+        Remove-Job $pullJob -Force -ErrorAction SilentlyContinue
     } finally {
         Set-Location $prevDir
     }
