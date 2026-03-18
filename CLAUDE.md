@@ -80,6 +80,17 @@ Invoke-Pester ./tests/common.tests.ps1 -Output Detailed
 [System.Management.Automation.Language.Parser]::ParseFile("configs/profile.ps1", [ref]$null, [ref]$null)
 ```
 
+## Claude Code Vietnamese IME Fix
+
+Fixes Vietnamese input in Claude Code CLI. Vietnamese IME (OpenKey, EVKey, Unikey)
+uses backspace+replace technique that Claude Code doesn't handle correctly.
+
+- **Script:** `scripts/fix-claude-vn.ps1` — PowerShell port of [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix)
+- **Command:** `Fix-ClaudeVN` — auto-detect and patch `cli.js`
+- **Restore:** `Fix-ClaudeVN -Restore` — rollback to backup
+- **Bootstrap:** Runs automatically during `bootstrap.ps1` (Step 7)
+- **After update:** Run `Fix-ClaudeVN` after each Claude Code npm update
+
 ## Common Claude Tasks
 
 - **Adding themes:** Edit `configs/themes.json` + create OMP file + add scheme/WT theme

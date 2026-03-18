@@ -150,15 +150,17 @@ if ($WtSettingsLocal) {
         Get-ChildItem (Split-Path $WtSettingsLocal -Parent) -Filter "settings.json.backup-*" |
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
-    Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
-    # Post-deploy: inject pnx markers + fix font name for installed version
+    # Atomic deploy: read repo JSON, inject markers, write via Save-WtSettings
     try {
-        $wtJson = Get-Content $WtSettingsLocal -Raw | ConvertFrom-Json
-        if (Initialize-WtPnxMarkers -WtJson $wtJson) {
-            $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsLocal -Encoding utf8NoBOM
+        $wtJson = Get-Content "$RepoRoot\configs\terminal-settings.json" -Raw | ConvertFrom-Json
+        Initialize-WtPnxMarkers -WtJson $wtJson | Out-Null
+        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal)) {
+            Write-Skip "Atomic write failed, falling back to Copy-Item"
+            Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
         }
     } catch {
-        Write-Skip "Could not inject pnx markers: $_"
+        Write-Skip "JSON processing failed: $_ — falling back to Copy-Item"
+        Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
     }
     Write-Ok "WT settings deployed"
 } else {
@@ -186,6 +188,17 @@ Write-Step "Setting PNX_TERMINAL_REPO environment variable..."
 [Environment]::SetEnvironmentVariable('PNX_TERMINAL_REPO', $RepoRoot, 'User')
 $env:PNX_TERMINAL_REPO = $RepoRoot
 Write-Ok "PNX_TERMINAL_REPO = $RepoRoot"
+
+# -- Step 7: Fix Claude Code Vietnamese IME --
+Write-Step "Fixing Claude Code Vietnamese IME..."
+try {
+    & "$RepoRoot\scripts\fix-claude-vn.ps1"
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        Write-Skip "Claude Code Vietnamese fix failed (Claude Code may not be installed yet)"
+    }
+} catch {
+    Write-Skip "Claude Code Vietnamese fix skipped: $_"
+}
 
 # -- Summary --
 Write-Host ""

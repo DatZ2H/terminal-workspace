@@ -75,9 +75,9 @@ function Repair-WtFontFace {
     $tempPath = "$WtPath.pnx-tmp"
     $json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
     try {
-        Move-Item $tempPath $WtPath -Force -ErrorAction Stop
+        [System.IO.File]::Move($tempPath, $WtPath, $true)
     } catch {
-        # Fallback: direct write if Move-Item fails
+        # Fallback: direct write if atomic move fails
         $json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
         Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
     }
@@ -85,7 +85,9 @@ function Repair-WtFontFace {
 }
 
 # -- Atomic WT Settings Writer --
-# Backup + temp file + Move-Item with retry + fallback Set-Content
+# Backup + temp file + .NET File.Move (true atomic replace) + fallback
+# Uses [IO.File]::Move(src, dst, overwrite:$true) which calls MoveFileEx
+# with MOVEFILE_REPLACE_EXISTING — no delete gap for WT file watcher to see.
 # Returns $true on success, $false on failure
 function Save-WtSettings {
     [CmdletBinding()]
@@ -98,10 +100,10 @@ function Save-WtSettings {
     # Write to temp file
     $tempPath = "$WtPath.pnx-tmp"
     $Json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
-    # Try Move-Item with retry (WT may hold file lock briefly)
+    # Atomic replace via .NET (true atomic on NTFS — no delete+rename gap)
     for ($retry = 0; $retry -lt 3; $retry++) {
         try {
-            Move-Item $tempPath $WtPath -Force -ErrorAction Stop
+            [System.IO.File]::Move($tempPath, $WtPath, $true)
             return $true
         } catch { Start-Sleep -Milliseconds 200 }
     }

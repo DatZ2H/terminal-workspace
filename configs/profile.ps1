@@ -870,6 +870,23 @@ function Get-Status {
     else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
 }
 
+function Fix-ClaudeVN {
+    [CmdletBinding()]
+    param(
+        [string]$Path,
+        [switch]$Restore
+    )
+    $script = "$env:PNX_TERMINAL_REPO\scripts\fix-claude-vn.ps1"
+    if (-not (Test-Path $script)) {
+        Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red
+        return
+    }
+    $params = @{}
+    if ($Path)    { $params['Path'] = $Path }
+    if ($Restore) { $params['Restore'] = $true }
+    & $script @params
+}
+
 function Update-Workspace {
     [CmdletBinding()]
     param()
@@ -905,7 +922,15 @@ function Update-Workspace {
     Write-Host "`n  Re-deploying configs..." -ForegroundColor Cyan
     & "$repo\scripts\sync-from-repo.ps1"
 
-    # 3. Reload profile (sync-from-repo.ps1 already cleared init cache)
+    # 3. Re-patch Claude Code Vietnamese IME fix (idempotent — skips if already patched)
+    Write-Host "`n  Checking Claude Code Vietnamese fix..." -ForegroundColor Cyan
+    try {
+        & "$repo\scripts\fix-claude-vn.ps1"
+    } catch {
+        Write-Host "  Vietnamese fix skipped: $_" -ForegroundColor Yellow
+    }
+
+    # 4. Reload profile (sync-from-repo.ps1 already cleared init cache)
     Write-Host "`n  Reloading profile..." -ForegroundColor Cyan
     . $PROFILE
     Write-Host "  Done. Workspace updated." -ForegroundColor Green

@@ -1,3 +1,4 @@
 *.backup-*
 *.log
 bash.exe.stackdump
+.claude/
