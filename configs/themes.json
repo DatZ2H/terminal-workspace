@@ -15,7 +15,15 @@
     "kryptonite": { "omp": "pnx-kryptonite.omp.json",      "scheme": "Kryptonite",              "wtTheme": "PNX Kryptonite" },
     "fl0":        { "omp": "pnx-fl0.omp.json",             "scheme": "fl0-c0d3",                "wtTheme": "PNX fl0-c0d3" },
     "greendark":  { "omp": "pnx-green-dark.omp.json",      "scheme": "Green Dark Supercharged", "wtTheme": "PNX Green Dark" },
-    "greennord":  { "omp": "pnx-green-nordic.omp.json",    "scheme": "Green Nordic",            "wtTheme": "PNX Green Nordic" }
+    "greennord":  { "omp": "pnx-green-nordic.omp.json",    "scheme": "Green Nordic",            "wtTheme": "PNX Green Nordic" },
+    "omni":       { "omp": "pnx-omni.omp.json",             "scheme": "Omni",                    "wtTheme": "PNX Omni" },
+    "topaz":      { "omp": "pnx-topaz.omp.json",            "scheme": "Topaz",                   "wtTheme": "PNX Topaz" },
+    "panda":      { "omp": "pnx-panda.omp.json",            "scheme": "Panda",                   "wtTheme": "PNX Panda" },
+    "evondev":    { "omp": "pnx-evondev-dracula.omp.json",   "scheme": "Evondev Dracula",         "wtTheme": "PNX Evondev Dracula" },
+    "reui":       { "omp": "pnx-reui.omp.json",             "scheme": "ReUI",                    "wtTheme": "PNX ReUI" },
+    "nebula":     { "omp": "pnx-nebula.omp.json",           "scheme": "Nebula",                  "wtTheme": "PNX Nebula" },
+    "rosepine":   { "omp": "pnx-rosepine.omp.json",         "scheme": "Rosé Pine",               "wtTheme": "PNX Rosé Pine" },
+    "holonights": { "omp": "pnx-holonights.omp.json",       "scheme": "Holographic Nights",      "wtTheme": "PNX Holographic Nights" }
   },
   "styles": {
     "mac":   { "opacity": 85,  "useAcrylic": true,  "useMica": false, "padding": "16, 12, 16, 12", "cursorShape": "bar",       "scrollbarState": "visible", "unfocusedOpacity": 70 },

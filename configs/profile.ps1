@@ -176,51 +176,24 @@ if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
 Remove-Variable _ompConfig, _fallback, _ompExe, _ompVer, _ompCfgTicks, _ompExtra, _ompCached, _ompInit -ErrorAction SilentlyContinue
 
 # ===== Terminal Icons (lazy-load on idle for fast startup) =====
-if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
-    # PS 7.3+: defer import to after first prompt renders (~200ms saved from startup)
-    Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
-        try { Import-Module Terminal-Icons -ErrorAction Stop } catch {
-            try {
-                if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
-                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
-                }
-                Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
-                Import-Module Terminal-Icons -ErrorAction SilentlyContinue
-            } catch {
-                Write-Warning "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
-            }
-        }
-    } | Out-Null
-} else {
-    # PS < 7.3: import directly (no OnIdle event available)
-    try { Import-Module Terminal-Icons -ErrorAction Stop } catch {
-        try {
-            if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
-                Where-Object { $_.Version -ge [Version]"2.8.5.201" })) {
-                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop *>$null
-            }
-            Install-Module Terminal-Icons -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop *>$null
+if (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue) {
+    if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
+        # PS 7.3+: defer import to after first prompt renders (~200ms saved from startup)
+        Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
             Import-Module Terminal-Icons -ErrorAction SilentlyContinue
-        } catch {
-            $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
-        }
+        } | Out-Null
+    } else {
+        # PS < 7.3: import directly (no OnIdle event available)
+        Import-Module Terminal-Icons -ErrorAction SilentlyContinue
     }
+} else {
+    $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
 }
 
 # ===== Nerd Font check (verify CaskaydiaCove is available) =====
 $_fontInfo = if (Get-Command Get-NerdFontInfo -ErrorAction SilentlyContinue) { Get-NerdFontInfo } else { $null }
 if (-not $_fontInfo -or -not $_fontInfo.Installed) {
-    # Auto-install if oh-my-posh is available
-    if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
-        try {
-            oh-my-posh font install CascadiaCode *>$null
-            if ($LASTEXITCODE -eq 0) { $_fontInfo = @{ Installed = $true } }
-        } catch {}
-    }
-    if (-not $_fontInfo -or -not $_fontInfo.Installed) {
-        $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
-    }
+    $_healthIssues += "CaskaydiaCove Nerd Font missing (icons broken) — run:  oh-my-posh font install CascadiaCode"
 }
 # ===== Auto-fix WT font face if using stale v2/v3 name =====
 if (Get-Command Repair-WtFontFace -ErrorAction SilentlyContinue) {
