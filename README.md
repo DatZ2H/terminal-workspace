@@ -133,7 +133,10 @@ terminal-workspace/
 ├── configs/
 │   ├── profile.ps1               # PowerShell profile (source of truth)
 │   ├── themes.json               # Theme & style definitions (ThemeDB + StyleDB + defaults)
-│   └── terminal-settings.json    # Windows Terminal settings (schemes + WT themes)
+│   ├── terminal-settings.json    # Windows Terminal settings (schemes + WT themes)
+│   ├── claude-settings.template.json  # Claude Code settings template (secrets removed)
+│   ├── claude.md                 # Global CLAUDE.md template
+│   └── statusline.sh             # Claude Code status bar script
 ├── themes/
 │   ├── pnx-dracula-pro.omp.json
 │   ├── pnx-dracula.omp.json
@@ -151,16 +154,18 @@ terminal-workspace/
 │   └── pnx-green-nordic.omp.json
 ├── tests/
 │   ├── common.tests.ps1          # Pester 5 tests for shared helpers
-│   └── profile.tests.ps1         # Pester 5 tests for profile functions
+│   ├── profile.tests.ps1         # Pester 5 tests for profile functions
+│   └── claude.tests.ps1          # Pester 5 tests for Claude Code helpers + deploy
 └── scripts/
-    ├── common.ps1                # Shared helpers (WT path, font, cache, markers, atomic writes)
+    ├── common.ps1                # Shared helpers (WT path, font, cache, markers, Claude config)
+    ├── deploy-claude.ps1         # Deploy Claude Code configs (safe merge, never overwrites secrets)
     ├── fix-claude-vn.ps1         # Claude Code Vietnamese IME fix (patch cli.js)
     ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
     ├── sync-to-repo.ps1          # Local configs -> repo (strips secrets)
-    ├── sync-from-repo.ps1        # Repo configs -> local (with backup)
-    └── status.ps1                # Show all tool versions + config status
+    ├── sync-from-repo.ps1        # Repo configs -> local (with backup + Claude deploy)
+    └── status.ps1                # Show all tool versions + config status + Claude Code
 ```
 
 ## Cheatsheet
@@ -247,10 +252,13 @@ rg "status.*active" --glob "*.md" # Regex + file filter
 ### Maintenance
 
 ```powershell
-Get-Status                        # Show versions of all tools + config paths
+Get-Status                        # Show versions of all tools + config paths + Claude Code status
 Update-Tools                      # Update everything (winget + scoop + modules + font)
 Update-Tools -Force               # Update without confirmation prompt
-Update-Workspace                  # Git pull + redeploy configs + reload profile
+Update-Workspace                  # Git pull + redeploy configs + Claude configs + reload profile
+Deploy-ClaudeConfig               # Set up/update Claude Code configs (safe merge)
+Deploy-ClaudeConfig -Force        # Re-deploy everything including CLAUDE.md
+Fix-ClaudeVN                      # Fix Vietnamese typing in Claude Code
 Test-ThemeIntegrity               # Verify ThemeDB, OMP files, and WT schemes are in sync
 Invoke-Pester ./tests/ -Output Detailed  # Run test suite (requires Pester 5+)
 ```
@@ -281,13 +289,14 @@ Sync-Config pull                  # Auto-backup before overwriting (keeps last 3
 
 ```powershell
 .\update.ps1                      # Git pull + redeploy + reload (no profile needed)
-.\scripts\status.ps1              # Tool versions (without loading profile)
+.\scripts\status.ps1              # Tool versions + Claude Code status (without loading profile)
 .\scripts\install-tools.ps1       # Install all tools from scratch
 .\scripts\install-fonts.ps1       # Reinstall Nerd Font
 .\scripts\update-tools.ps1        # Update all tools (interactive)
 .\scripts\update-tools.ps1 -Force # Update without confirmation
-.\scripts\sync-to-repo.ps1        # Push local -> repo (strips environment secrets)
-.\scripts\sync-from-repo.ps1      # Pull repo -> local (keeps last 3 backups)
+.\scripts\sync-to-repo.ps1        # Push local -> repo (strips secrets from Claude + WT settings)
+.\scripts\sync-from-repo.ps1      # Pull repo -> local (keeps last 3 backups + deploys Claude configs)
+.\scripts\deploy-claude.ps1       # Deploy Claude Code configs standalone (safe merge)
 ```
 
 ## New Machine Setup
@@ -379,21 +388,51 @@ $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 
 ## Claude Code Integration
 
-Built-in support for [Claude Code](https://claude.ai/code) CLI:
+Built-in support for [Claude Code](https://claude.ai/code) CLI. Bootstrap automatically sets up everything if Claude Code is installed. If you install Claude Code later, run `Deploy-ClaudeConfig` to set up.
 
-**Vietnamese IME Fix** — fixes input bug when typing Vietnamese with Telex/VNI (OpenKey, EVKey, Unikey):
+### What Gets Set Up
+
+| Component | What it does | How it's deployed |
+|-----------|-------------|-------------------|
+| **Status bar** | Shows model name, context %, cost, tokens, and current folder | Always copied from repo (repo = latest version) |
+| **Settings** | Plugins, language preference, status bar config | Safely merged — your existing settings are kept, only missing ones are added |
+| **CLAUDE.md** | Global instructions (Vietnamese output, emoji rules) | Copied only if you don't have one yet |
+| **Vietnamese IME fix** | Fixes typing bug with Telex/VNI input methods | Patches `cli.js` automatically |
+
+### Safe for Existing Users
+
+If you already have Claude Code configured, your settings are **never overwritten**:
+
+- **Your MCP servers and tokens** — completely untouched (protected)
+- **Your plugins** — kept as-is, new ones added alongside
+- **Your preferences** — your values win over template values
+- **Status bar config** — always updated to latest version from repo
+
+### Commands
+
 ```powershell
-Fix-ClaudeVN              # Auto-detect and patch cli.js
-Fix-ClaudeVN -Restore     # Rollback to backup
+Deploy-ClaudeConfig           # Set up Claude Code configs (safe, won't break anything)
+Deploy-ClaudeConfig -Force    # Re-deploy everything (overwrites CLAUDE.md too)
+Fix-ClaudeVN                  # Fix Vietnamese typing bug (auto-detect and patch)
+Fix-ClaudeVN -Restore         # Undo the Vietnamese fix
+Get-Status                    # Shows Claude Code version, fix status, statusline status
 ```
-Runs automatically during bootstrap (Step 7). Re-run after each Claude Code npm update.
-Based on [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix).
 
-**Status Line** — show model, context usage, cost, and working directory:
-```bash
-# In Claude Code, run:
-/statusline show model name and context percentage with a progress bar, cost and current directory
-```
+### Vietnamese IME Fix
+
+Fixes input bug when typing Vietnamese with Telex/VNI (OpenKey, EVKey, Unikey). The fix patches Claude Code's `cli.js` file. Based on [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix).
+
+- Runs automatically during bootstrap
+- Re-run `Fix-ClaudeVN` after each Claude Code npm update
+- Safe to run multiple times (skips if already patched)
+
+### Syncing Claude Settings Between Machines
+
+When you run `Sync-Config push`, your Claude settings are saved to the repo **with all secrets removed** — tokens like `github_pat_...` or `sk-...` are replaced with `<REDACTED>`. This means:
+
+- Safe to commit and push to GitHub
+- On another machine, `Sync-Config pull` (or `Update-Workspace`) deploys the settings with the safe merge described above
+- You add your own tokens on each machine — they stay local, never in the repo
 
 ## Documentation
 

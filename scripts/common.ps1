@@ -211,3 +211,195 @@ function Initialize-WtPnxMarkers {
     }
     return $changed
 }
+
+# -- Claude Code Config Path Detection --
+# Returns path to Claude Code config files, or $null if ~/.claude/ doesn't exist
+function Get-ClaudeConfigPath {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('settings', 'claude.md', 'statusline')]
+        [string]$Type = 'settings'
+    )
+    $claudeDir = Join-Path $env:USERPROFILE ".claude"
+    if (-not (Test-Path $claudeDir)) { return $null }
+    switch ($Type) {
+        'settings'   { Join-Path $claudeDir "settings.json" }
+        'claude.md'  { Join-Path $claudeDir "CLAUDE.md" }
+        'statusline' { Join-Path $claudeDir "statusline.sh" }
+    }
+}
+
+# -- Additive JSON Merge --
+# Merges Source into Target (PSCustomObject) with protection rules.
+# Modifies Target in-place, returns $true if any changes were made.
+function Merge-JsonAdditive {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Target,
+        [Parameter(Mandatory)][object]$Source,
+        [string[]]$ProtectedKeys = @('mcpServers'),
+        [string[]]$OverwriteKeys = @('statusLine')
+    )
+    $changed = $false
+    foreach ($prop in $Source.PSObject.Properties) {
+        $key = $prop.Name
+        # Protected: never touch
+        if ($key -in $ProtectedKeys) { continue }
+        # Overwrite: always take from Source
+        if ($key -in $OverwriteKeys) {
+            if (-not $Target.PSObject.Properties[$key]) {
+                $Target | Add-Member -NotePropertyName $key -NotePropertyValue $prop.Value
+                $changed = $true
+            } elseif (($Target.$key | ConvertTo-Json -Depth 10 -Compress) -ne ($prop.Value | ConvertTo-Json -Depth 10 -Compress)) {
+                $Target.$key = $prop.Value
+                $changed = $true
+            }
+            continue
+        }
+        # Key not in Target: add from Source
+        if (-not $Target.PSObject.Properties[$key]) {
+            $Target | Add-Member -NotePropertyName $key -NotePropertyValue $prop.Value
+            $changed = $true
+            continue
+        }
+        # Both are objects: recurse (no protected/overwrite propagation)
+        $tVal = $Target.$key
+        $sVal = $prop.Value
+        if ($tVal -is [PSCustomObject] -and $sVal -is [PSCustomObject]) {
+            if (Merge-JsonAdditive -Target $tVal -Source $sVal -ProtectedKeys @() -OverwriteKeys @()) {
+                $changed = $true
+            }
+            continue
+        }
+        # Key exists in Target: user wins (keep existing)
+    }
+    return $changed
+}
+
+# -- Secret Detection Patterns --
+$script:_SecretPatterns = @(
+    'github_pat_[A-Za-z0-9_]+'
+    'ghp_[A-Za-z0-9]+'
+    'sk-ant-[A-Za-z0-9]+'
+    'sk-[A-Za-z0-9]{20,}'
+    'xoxb-[A-Za-z0-9\-]+'
+    'xoxp-[A-Za-z0-9\-]+'
+)
+$script:_SecretKeywords = @('token', 'key', 'secret', 'password', 'credential', 'pat')
+
+# -- Remove Secrets from Claude Settings JSON --
+# Returns a sanitized deep copy. Does NOT mutate input.
+function Remove-ClaudeSecrets {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Json)
+    # Deep clone via JSON round-trip
+    $clone = $Json | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    # Strip all env values in mcpServers
+    if ($clone.PSObject.Properties['mcpServers'] -and $clone.mcpServers -is [PSCustomObject]) {
+        foreach ($server in $clone.mcpServers.PSObject.Properties) {
+            $srv = $server.Value
+            if ($srv.PSObject.Properties['env'] -and $srv.env -is [PSCustomObject]) {
+                foreach ($envProp in $srv.env.PSObject.Properties) {
+                    $val = $envProp.Value
+                    if ($val -is [string] -and $val.Length -gt 0) {
+                        $isSecret = $false
+                        foreach ($pattern in $script:_SecretPatterns) {
+                            if ($val -match $pattern) { $isSecret = $true; break }
+                        }
+                        if (-not $isSecret) {
+                            $keyLower = $envProp.Name.ToLower()
+                            foreach ($kw in $script:_SecretKeywords) {
+                                if ($keyLower -match $kw) { $isSecret = $true; break }
+                            }
+                        }
+                        if ($isSecret) { $srv.env.($envProp.Name) = "<REDACTED>" }
+                    }
+                }
+            }
+        }
+    }
+    # Scan all string values for secret patterns + keywords (outside mcpServers too)
+    function Redact-DeepStrings([object]$Obj, [string]$Path) {
+        if ($Obj -is [PSCustomObject]) {
+            foreach ($p in $Obj.PSObject.Properties) {
+                if ($p.Value -is [string] -and $p.Value.Length -gt 0) {
+                    $isSecret = $false
+                    foreach ($pattern in $script:_SecretPatterns) {
+                        if ($p.Value -match $pattern) { $isSecret = $true; break }
+                    }
+                    if (-not $isSecret) {
+                        $keyLower = $p.Name.ToLower()
+                        foreach ($kw in $script:_SecretKeywords) {
+                            if ($keyLower -match $kw -and $p.Value -ne '<REDACTED>' -and $p.Value.Length -gt 8) {
+                                $isSecret = $true; break
+                            }
+                        }
+                    }
+                    if ($isSecret) { $Obj.($p.Name) = "<REDACTED>" }
+                } elseif ($p.Value -is [PSCustomObject]) {
+                    Redact-DeepStrings $p.Value "$Path.$($p.Name)"
+                } elseif ($p.Value -is [array]) {
+                    for ($i = 0; $i -lt $p.Value.Count; $i++) {
+                        $item = $p.Value[$i]
+                        if ($item -is [string]) {
+                            foreach ($pattern in $script:_SecretPatterns) {
+                                if ($item -match $pattern) { $p.Value[$i] = "<REDACTED>"; break }
+                            }
+                        } elseif ($item -is [PSCustomObject]) {
+                            Redact-DeepStrings $item "$Path.$($p.Name)[$i]"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Redact-DeepStrings $clone ""
+    return $clone
+}
+
+# -- Test for Secrets in JSON --
+# Returns array of paths containing secrets (empty = safe)
+function Test-ClaudeSecrets {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Json)
+    $found = [System.Collections.Generic.List[string]]::new()
+    function Scan-Object([object]$Obj, [string]$Path) {
+        if ($Obj -is [PSCustomObject]) {
+            foreach ($p in $Obj.PSObject.Properties) {
+                $currentPath = if ($Path) { "$Path.$($p.Name)" } else { $p.Name }
+                if ($p.Value -is [string] -and $p.Value.Length -gt 0) {
+                    foreach ($pattern in $script:_SecretPatterns) {
+                        if ($p.Value -match $pattern) {
+                            $found.Add($currentPath)
+                            break
+                        }
+                    }
+                    if ($currentPath -notin $found) {
+                        $keyLower = $p.Name.ToLower()
+                        foreach ($kw in $script:_SecretKeywords) {
+                            if ($keyLower -match $kw -and $p.Value -ne '<REDACTED>' -and $p.Value.Length -gt 8) {
+                                $found.Add($currentPath)
+                                break
+                            }
+                        }
+                    }
+                } elseif ($p.Value -is [PSCustomObject]) {
+                    Scan-Object $p.Value $currentPath
+                } elseif ($p.Value -is [array]) {
+                    for ($i = 0; $i -lt $p.Value.Count; $i++) {
+                        $item = $p.Value[$i]
+                        if ($item -is [string] -and $item.Length -gt 0) {
+                            foreach ($pattern in $script:_SecretPatterns) {
+                                if ($item -match $pattern) { $found.Add("$currentPath[$i]"); break }
+                            }
+                        } elseif ($item -is [PSCustomObject]) {
+                            Scan-Object $item "$currentPath[$i]"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Scan-Object $Json ""
+    return @($found)
+}

@@ -189,15 +189,29 @@ Write-Step "Setting PNX_TERMINAL_REPO environment variable..."
 $env:PNX_TERMINAL_REPO = $RepoRoot
 Write-Ok "PNX_TERMINAL_REPO = $RepoRoot"
 
-# -- Step 7: Fix Claude Code Vietnamese IME --
-Write-Step "Fixing Claude Code Vietnamese IME..."
-try {
-    & "$RepoRoot\scripts\fix-claude-vn.ps1"
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        Write-Skip "Claude Code Vietnamese fix failed (Claude Code may not be installed yet)"
+# ════════════════════════════════════════
+# Phase 2: Claude Code Setup
+# ════════════════════════════════════════
+
+# -- Step 7: Check Claude Code --
+Write-Step "Checking Claude Code..."
+$claudeDir = Join-Path $env:USERPROFILE ".claude"
+$claudeInstalled = (Test-Path $claudeDir) -or (Get-Command claude -ErrorAction SilentlyContinue)
+if (-not $claudeInstalled) {
+    Write-Skip "Claude Code not detected -- skipping Phase 2 (install via: npm i -g @anthropic-ai/claude-code)"
+} else {
+    Write-Ok "Claude Code detected"
+
+    # -- Step 8: Deploy Claude Configs --
+    Write-Step "Deploying Claude Code configs..."
+    try {
+        & "$RepoRoot\scripts\deploy-claude.ps1"
+        if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            Write-Skip "Claude config deploy had warnings (exit $LASTEXITCODE)"
+        }
+    } catch {
+        Write-Skip "Claude config deploy skipped: $_"
     }
-} catch {
-    Write-Skip "Claude Code Vietnamese fix skipped: $_"
 }
 
 # -- Summary --

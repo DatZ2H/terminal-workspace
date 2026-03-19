@@ -870,6 +870,14 @@ function Fix-ClaudeVN {
     & $script @params
 }
 
+function Deploy-ClaudeConfig {
+    [CmdletBinding()]
+    param([switch]$Force)
+    $script = "$env:PNX_TERMINAL_REPO\scripts\deploy-claude.ps1"
+    if (Test-Path $script) { & $script -Force:$Force }
+    else { Write-Host "  Repo not found. Set PNX_TERMINAL_REPO." -ForegroundColor Red }
+}
+
 function Update-Workspace {
     [CmdletBinding()]
     param()

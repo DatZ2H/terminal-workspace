@@ -13,12 +13,14 @@ PowerShell 7 + Windows Terminal theme management system. Provides:
 ## Architecture
 
 ```
-Engine (logic)          Content (data)
-├── scripts/            ├── configs/themes.json    ← ThemeDB + StyleDB + defaults
-│   ├── common.ps1      ├── configs/terminal-settings.json
-│   ├── sync-to-repo    ├── themes/*.omp.json      ← OMP prompt configs
-│   └── sync-from-repo  └── configs/profile.ps1    ← PS profile (loads JSON)
-├── bootstrap.ps1
+Engine (logic)                  Content (data)
+├── scripts/                    ├── configs/themes.json              ← ThemeDB + StyleDB + defaults
+│   ├── common.ps1              ├── configs/terminal-settings.json
+│   ├── deploy-claude.ps1       ├── configs/claude-settings.template.json ← Claude settings (no secrets)
+│   ├── sync-to-repo            ├── configs/statusline.sh           ← Claude statusline script
+│   ├── sync-from-repo          ├── configs/claude.md               ← Global CLAUDE.md template
+│   └── fix-claude-vn.ps1       ├── themes/*.omp.json               ← OMP prompt configs
+├── bootstrap.ps1               └── configs/profile.ps1             ← PS profile (loads JSON)
 └── tests/
 ```
 
@@ -29,9 +31,13 @@ Engine (logic)          Content (data)
 | `configs/themes.json` | Single source of truth for themes, styles, and defaults |
 | `configs/profile.ps1` | PowerShell profile — loads ThemeDB/StyleDB from JSON, inits OMP/zoxide |
 | `configs/terminal-settings.json` | WT settings template (schemes + WT themes inline) |
-| `scripts/common.ps1` | Shared helpers: WT path detection, atomic writes, init cache, markers |
+| `scripts/common.ps1` | Shared helpers: WT path, atomic writes, init cache, markers, Claude config helpers |
 | `scripts/fix-claude-vn.ps1` | Claude Code Vietnamese IME fix (patches cli.js) |
-| `bootstrap.ps1` | First-run setup: install tools, deploy configs, set env vars |
+| `scripts/deploy-claude.ps1` | Deploy Claude Code configs (statusline, settings merge, CLAUDE.md, IME fix) |
+| `configs/claude-settings.template.json` | Claude settings template (secrets stripped, portable statusline path) |
+| `configs/statusline.sh` | Claude Code statusline script (3-line layout: model, cost, CWD) |
+| `configs/claude.md` | Global CLAUDE.md template (Vietnamese rules, emoji policy) |
+| `bootstrap.ps1` | First-run setup: install tools, deploy configs, set env vars, Claude setup |
 | `themes/*.omp.json` | Oh My Posh prompt theme files (deployed to ~/.oh-my-posh/themes/) |
 
 ## Data Flow
@@ -39,8 +45,8 @@ Engine (logic)          Content (data)
 1. `bootstrap.ps1` → sets `PNX_TERMINAL_REPO` env var, deploys themes + profile + WT settings
 2. Profile load → reads `configs/themes.json` via `$env:PNX_TERMINAL_REPO` → builds ThemeDB/StyleDB
 3. `Set-Theme <name>` → updates OMP prompt + WT settings.json (atomic write) + pnx markers
-4. `Sync-Config push` → copies local changes back to repo (OMP files, WT settings)
-5. `Sync-Config pull` → deploys from repo to local, clears init cache, reloads profile
+4. `Sync-Config push` → copies local changes back to repo (OMP files, WT settings, Claude configs with secrets stripped)
+5. `Sync-Config pull` → deploys from repo to local, deploys Claude configs (additive merge), clears init cache, reloads profile
 
 ## ThemeDB Structure
 
@@ -90,8 +96,18 @@ uses backspace+replace technique that Claude Code doesn't handle correctly.
 - **Script:** `scripts/fix-claude-vn.ps1` — PowerShell port of [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix)
 - **Command:** `Fix-ClaudeVN` — auto-detect and patch `cli.js`
 - **Restore:** `Fix-ClaudeVN -Restore` — rollback to backup
-- **Bootstrap:** Runs automatically during `bootstrap.ps1` (Step 7)
+- **Bootstrap:** Runs automatically during `bootstrap.ps1` Phase 2
 - **After update:** Run `Fix-ClaudeVN` after each Claude Code npm update
+
+## Claude Code Config Management
+
+Two-pillar system: Terminal (themes/styles/WT) + Claude Code (statusline/settings/CLAUDE.md).
+
+- **Deploy:** `Deploy-ClaudeConfig [-Force]` — runs `scripts/deploy-claude.ps1`
+- **Settings merge:** Additive-only — `mcpServers` protected (never touched), `statusLine` always overwritten (repo = source of truth), existing user values preserved
+- **Secret stripping:** `Sync-Config push` strips secrets (github_pat_, ghp_, sk-, tokens) before writing template to repo
+- **Bootstrap Phase 2:** Gated on Claude Code being installed — Steps 7-8 (detect + deploy)
+- **Template:** `configs/claude-settings.template.json` uses `bash ~/.claude/statusline.sh` (portable path)
 
 ## Common Claude Tasks
 

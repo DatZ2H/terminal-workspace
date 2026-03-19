@@ -62,6 +62,43 @@ if ($themeFiles) {
     Write-Host "  Themes           NONE FOUND" -ForegroundColor Red
 }
 
+# Claude Code Settings (strip secrets before saving to repo)
+$claudeSettings = Get-ClaudeConfigPath -Type settings
+if ($claudeSettings -and (Test-Path $claudeSettings)) {
+    try {
+        $claudeJson = Get-Content $claudeSettings -Raw | ConvertFrom-Json
+        $secrets = Test-ClaudeSecrets -Json $claudeJson
+        if ($secrets.Count -gt 0) {
+            Write-Host "  Stripping $($secrets.Count) secret(s) from Claude settings..." -ForegroundColor Yellow
+        }
+        $sanitized = Remove-ClaudeSecrets -Json $claudeJson
+        $sanitized | ConvertTo-Json -Depth 10 | Set-Content "$RepoRoot\configs\claude-settings.template.json" -Encoding utf8NoBOM
+        Write-Host "  Claude Settings  OK (secrets stripped)" -ForegroundColor Green
+    } catch {
+        Write-Host "  Claude Settings  FAILED: $_ -- skipped to avoid exposing secrets" -ForegroundColor Red
+    }
+} else {
+    Write-Host "  Claude Settings  NOT FOUND" -ForegroundColor DarkGray
+}
+
+# Statusline (direct copy, no secrets)
+$statusline = Get-ClaudeConfigPath -Type statusline
+if ($statusline -and (Test-Path $statusline)) {
+    Copy-Item $statusline "$RepoRoot\configs\statusline.sh" -Force
+    Write-Host "  Statusline       OK" -ForegroundColor Green
+} else {
+    Write-Host "  Statusline       NOT FOUND" -ForegroundColor DarkGray
+}
+
+# CLAUDE.md (direct copy)
+$claudeMd = Get-ClaudeConfigPath -Type 'claude.md'
+if ($claudeMd -and (Test-Path $claudeMd)) {
+    Copy-Item $claudeMd "$RepoRoot\configs\claude.md" -Force
+    Write-Host "  CLAUDE.md        OK" -ForegroundColor Green
+} else {
+    Write-Host "  CLAUDE.md        NOT FOUND" -ForegroundColor DarkGray
+}
+
 Write-Host ""
 Write-Host "  Review changes:" -ForegroundColor DarkGray
 Write-Host "    cd $RepoRoot && git diff" -ForegroundColor DarkGray

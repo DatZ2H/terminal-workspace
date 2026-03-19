@@ -70,6 +70,14 @@ if ($themeFiles) {
     Write-Host "  Themes           NONE IN REPO" -ForegroundColor Red
 }
 
+# Claude Code Configs
+$deployScript = Join-Path $RepoRoot "scripts\deploy-claude.ps1"
+if (Test-Path $deployScript) {
+    Write-Host ""
+    Write-Host "  Claude Code configs:" -ForegroundColor Cyan
+    & $deployScript
+}
+
 # Clear init cache so next profile load regenerates from fresh configs
 if (Get-Command Clear-PnxCache -ErrorAction SilentlyContinue) { Clear-PnxCache }
 

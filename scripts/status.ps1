@@ -82,4 +82,46 @@ if ($fi.FontFace -and $wtSettingsPath -and (Test-Path $wtSettingsPath)) {
 # Theme count
 $themeCount = (Get-ChildItem $OmpThemesLocal -Filter "pnx-*.omp.json" -ErrorAction SilentlyContinue).Count
 Write-Host "`n  PNX Themes:      $themeCount installed" -ForegroundColor $(if ($themeCount -gt 0) { "Green" } else { "Yellow" })
+
+# Claude Code
+Write-Host "`n  Claude Code" -ForegroundColor Cyan
+Write-Host "  ────────────────────────────────────" -ForegroundColor DarkGray
+
+$claudeVer = try { (claude --version 2>$null) -replace 'claude ','' } catch { $null }
+$claudeVerColor = if ($claudeVer) { "Green" } else { "Red" }
+if (-not $claudeVer) { $claudeVer = "not found" }
+Write-Host ("  {0,-18}" -f "Version") -NoNewline
+Write-Host $claudeVer -ForegroundColor $claudeVerColor
+
+# Vietnamese IME fix
+$claudeCliJs = $null
+$npmRoot = try { (npm root -g 2>$null) } catch { $null }
+if ($npmRoot) { $claudeCliJs = Join-Path $npmRoot "@anthropic-ai\claude-code\cli.js" }
+if ($claudeCliJs -and (Test-Path $claudeCliJs)) {
+    $patchMarker = Select-String -Path $claudeCliJs -Pattern 'VIETNAMESE_IME_FIX' -Quiet -ErrorAction SilentlyContinue
+    $fixStatus = if ($patchMarker) { "patched" } else { "unpatched" }
+    $fixColor = if ($patchMarker) { "Green" } else { "Yellow" }
+} else {
+    $fixStatus = "n/a"
+    $fixColor = "DarkGray"
+}
+Write-Host ("  {0,-18}" -f "Vietnamese IME") -NoNewline
+Write-Host $fixStatus -ForegroundColor $fixColor
+
+# Statusline
+$statuslinePath = Join-Path $env:USERPROFILE ".claude\statusline.sh"
+$slStatus = if (Test-Path $statuslinePath) { "active" } else { "missing" }
+$slColor = if (Test-Path $statuslinePath) { "Green" } else { "Yellow" }
+Write-Host ("  {0,-18}" -f "Statusline") -NoNewline
+Write-Host $slStatus -ForegroundColor $slColor
+
+# Settings path
+$claudeSettingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
+$csExists = Test-Path $claudeSettingsPath
+$csStatus = if ($csExists) { "OK" } else { "MISSING" }
+$csColor = if ($csExists) { "Green" } else { "Red" }
+Write-Host ("  {0,-18}" -f "Settings") -NoNewline
+Write-Host ("{0,-10}" -f $csStatus) -ForegroundColor $csColor -NoNewline
+Write-Host $claudeSettingsPath -ForegroundColor DarkGray
+
 Write-Host ""
