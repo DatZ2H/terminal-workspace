@@ -119,6 +119,7 @@ OMP prompt always matches the active WT color scheme.
 | Theme auto-detection | Reads `pnxTheme`/`pnxStyle` markers from WT settings on profile load |
 | Nerd Font auto-repair | Detects v2/v3 font name and updates WT settings if mismatched |
 | Health check on load | Reports config issues (missing font, unreadable WT settings) at startup |
+| Terminal-Icons lazy proxy | Icons work on first `ls` even before shell idle — proxy auto-imports module, then self-removes |
 | Custom theme persistence | User-created themes saved to `%LOCALAPPDATA%\pnx-terminal\themes.json`, merged into ThemeDB on load |
 | `-WhatIf` / `-Verbose` support | All public functions support common parameters via `[CmdletBinding()]` |
 
@@ -153,6 +154,7 @@ terminal-workspace/
 │   └── profile.tests.ps1         # Pester 5 tests for profile functions
 └── scripts/
     ├── common.ps1                # Shared helpers (WT path, font, cache, markers, atomic writes)
+    ├── fix-claude-vn.ps1         # Claude Code Vietnamese IME fix (patch cli.js)
     ├── install-tools.ps1         # Install winget + scoop packages
     ├── install-fonts.ps1         # Install Nerd Font
     ├── update-tools.ps1          # Update all tools
@@ -318,6 +320,15 @@ If icons are still broken after restart, check the font name matches:
 Get-Status    # Look at the "Nerd Font" section — shows installed version and WT font face match
 ```
 
+**Terminal-Icons not showing (no icons on `ls`)**
+```powershell
+# Check if module is installed
+Get-Module Terminal-Icons -ListAvailable
+# If missing:
+Install-Module Terminal-Icons -Force
+# If installed but no icons — restart terminal (module lazy-loads via proxy on first ls)
+```
+
 **OMP prompt not loading**
 ```powershell
 oh-my-posh version                # Should show version number
@@ -366,23 +377,22 @@ $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 | `PNX_TERMINAL_REPO` | Path to this repo | bootstrap (auto) |
 | `PNX_OMP_THEMES` | Custom theme directory (optional) | manual |
 
-## Optional: Claude Code CLI
+## Claude Code Integration
 
-If you use [Claude Code](https://claude.ai/code), here are some useful additions (not included in this repo — configure manually):
+Built-in support for [Claude Code](https://claude.ai/code) CLI:
+
+**Vietnamese IME Fix** — fixes input bug when typing Vietnamese with Telex/VNI (OpenKey, EVKey, Unikey):
+```powershell
+Fix-ClaudeVN              # Auto-detect and patch cli.js
+Fix-ClaudeVN -Restore     # Rollback to backup
+```
+Runs automatically during bootstrap (Step 7). Re-run after each Claude Code npm update.
+Based on [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix).
 
 **Status Line** — show model, context usage, cost, and working directory:
 ```bash
 # In Claude Code, run:
 /statusline show model name and context percentage with a progress bar, cost and current directory
-```
-This generates a status line script at `~/.claude/statusline.sh` automatically.
-
-**Vietnamese IME Fix** — fix input bug when typing Vietnamese with Telex/VNI:
-```bash
-# See: https://github.com/manhit96/claude-code-vietnamese-fix
-pip install claude-code-vietnamese-fix
-claude-vn-fix
-# Re-run after each Claude Code update
 ```
 
 ## Documentation

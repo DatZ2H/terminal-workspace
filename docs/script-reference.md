@@ -70,6 +70,24 @@ Shared utility library. Dot-sourced by all other scripts and profile.
 
 ---
 
+### `scripts/fix-claude-vn.ps1`
+
+Patches Claude Code CLI (`cli.js`) to fix Vietnamese IME input (backspace+replace technique used by OpenKey, EVKey, Unikey).
+
+**No dependencies** — standalone script, no dot-sourcing needed.
+
+**How it works:** Finds `cli.js` in the npm global prefix, backs up the original, then patches the readline handling to correctly process Vietnamese IME keystrokes.
+
+**Profile command:** `Fix-ClaudeVN` (defined in `profile.ps1`)
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-Restore` | `$false` | Rollback to backup instead of patching |
+
+**Called by:** `bootstrap.ps1` Step 7 (auto-runs during first setup)
+
+---
+
 ### `scripts/install-tools.ps1`
 
 Installs all project dependencies.
@@ -195,6 +213,8 @@ Sync-Config pull                    # Repo → local + reload
 Update-Tools [-Force]               # Update all tools
 Update-Workspace                    # Git pull + redeploy + reload
 Get-Status                          # Show versions and config status
+Fix-ClaudeVN                        # Patch Claude Code for Vietnamese IME
+Fix-ClaudeVN -Restore               # Rollback Claude Code patch
 ```
 
 ### Tab Completion

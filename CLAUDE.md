@@ -30,6 +30,7 @@ Engine (logic)          Content (data)
 | `configs/profile.ps1` | PowerShell profile — loads ThemeDB/StyleDB from JSON, inits OMP/zoxide |
 | `configs/terminal-settings.json` | WT settings template (schemes + WT themes inline) |
 | `scripts/common.ps1` | Shared helpers: WT path detection, atomic writes, init cache, markers |
+| `scripts/fix-claude-vn.ps1` | Claude Code Vietnamese IME fix (patches cli.js) |
 | `bootstrap.ps1` | First-run setup: install tools, deploy configs, set env vars |
 | `themes/*.omp.json` | Oh My Posh prompt theme files (deployed to ~/.oh-my-posh/themes/) |
 
@@ -57,6 +58,7 @@ Custom themes (created via `New-PnxTheme`) are stored in `%LOCALAPPDATA%\pnx-ter
 - **Atomic writes:** WT settings written via `Save-WtSettings` (backup → temp → rename)
 - **Cache invalidation:** `Clear-PnxCache` after any config change (OMP/zoxide init cache)
 - **Type coercion:** StyleDB values from JSON need explicit `[int]`/`[bool]` cast in PowerShell
+- **Terminal-Icons proxy ordering:** Must `Remove-Item` proxy BEFORE `Import-Module` — Terminal-Icons internally calls `Get-ChildItem` which re-enters the proxy and hits module nesting limit
 
 ## How to Add a New Theme
 

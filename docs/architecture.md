@@ -102,7 +102,7 @@ profile.ps1 loaded by PowerShell
     │   └─ Fallback: heuristic match (colorScheme name, opacity+acrylic+padding score)
     ├─ Init Oh My Posh (cached — invalidated on theme/version change)
     ├─ Init zoxide (cached — invalidated on version change)
-    ├─ Lazy-load Terminal-Icons (OnIdle on PS 7.3+)
+    ├─ Lazy-load Terminal-Icons (proxy on first ls + OnIdle fallback, PS 7.3+)
     ├─ Check/repair Nerd Font face (v2↔v3 auto-fix)
     └─ Report health issues (if any)
 ```

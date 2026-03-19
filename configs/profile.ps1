@@ -178,9 +178,19 @@ Remove-Variable _ompConfig, _fallback, _ompExe, _ompVer, _ompCfgTicks, _ompExtra
 # ===== Terminal Icons (lazy-load on idle for fast startup) =====
 if (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue) {
     if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
-        # PS 7.3+: defer import to after first prompt renders (~200ms saved from startup)
+        # Proxy: auto-import on first ls/Get-ChildItem call (before OnIdle fires)
+        # NOTE: Must remove proxy BEFORE Import-Module — Terminal-Icons internally
+        # calls Get-ChildItem (to scan icon dirs), which would re-enter this proxy
+        # and hit the module nesting limit (10 levels).
+        function Global:Get-ChildItem {
+            Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
+            Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+            Microsoft.PowerShell.Management\Get-ChildItem @args
+        }
+        # OnIdle: import + clean up proxy if still present
         Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
             Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+            Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
         } | Out-Null
     } else {
         # PS < 7.3: import directly (no OnIdle event available)
