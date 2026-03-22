@@ -56,23 +56,28 @@ Add pane layout management and a discoverable cheatsheet to the terminal workspa
 Layouts reference WT profile names, not raw commands. This provides security (no arbitrary command execution) and integration (inherits profile's icon, font, color scheme, startup command).
 
 Expected WT profiles (validated at runtime):
-- `"PowerShell"` — default pwsh profile
-- `"Claude"` — custom WT profile with `commandline: "claude"` (created during bootstrap or manually)
+- `"PowerShell"` — default pwsh profile (used by all predefined layouts)
 - `"Command Prompt"` — cmd.exe
+- `"Claude"` — optional custom WT profile with `commandline: "claude"` (created via `New-ClaudeProfile` helper)
 - `null` — WT default profile
 
 If a referenced profile does not exist, `Open-Layout` warns and falls back to the default profile.
+
+**Claude profile strategy:** All predefined layouts use `"PowerShell"` by default so they work out-of-the-box. Users who want dedicated Claude panes can:
+1. Run `New-ClaudeProfile` (helper function) to inject a `Claude` WT profile into settings.json
+2. Create custom layouts referencing `"Claude"` profile
+3. Or manually create the profile in WT Settings UI
 
 ### Predefined Layouts
 
 | Name | Description | Layout |
 |------|-------------|--------|
-| `dual-claude` | Two Claude Code instances side by side | `[Claude \| Claude]` |
-| `claude-terminal` | Claude Code + plain shell | `[Claude \| PowerShell]` |
-| `triple-claude` | 3 Claude: 2 top + 1 bottom | `[Claude \| Claude]` + `[Claude below]` |
-| `claude-dev` | Claude + terminal + git log | `[Claude \| PowerShell]` + `[PowerShell below]` |
-| `dev-split` | Two shells side by side (no Claude) | `[PowerShell \| PowerShell]` |
-| `dev-workspace` | Shell + shell + monitoring | `[PowerShell \| PowerShell]` + `[PowerShell below]` |
+| `dual-pane` | Two shells side by side | `[PowerShell \| PowerShell]` |
+| `triple-pane` | 3 panes: 2 top + 1 bottom | `[PowerShell \| PowerShell]` + `[PowerShell below]` |
+| `dev-monitor` | Shell + shell + monitoring pane | `[PowerShell \| PowerShell]` + `[PowerShell below]` |
+| `side-by-side` | Two shells for compare/review | `[PowerShell \| PowerShell]` |
+
+All predefined layouts use the `"PowerShell"` profile for maximum compatibility. Users can create custom layouts with `"Claude"` or other profiles after running `New-ClaudeProfile`.
 
 ## Commands & Functions
 
@@ -84,7 +89,8 @@ If a referenced profile does not exist, `Open-Layout` warns and falls back to th
 | `Save-Layout <name> -Panes <config> [-Description <text>]` | Save a new layout to local JSON | `Save-Layout my-setup -Panes @(...)` |
 | `Remove-Layout <name>` | Delete a custom layout (predefined are protected) | `Remove-Layout old-setup` |
 | `Get-LayoutList` | Display all available layouts (predefined + custom) | `Get-LayoutList` |
-| `Get-LayoutCommand <name> [-Dir <path>]` | Output the raw `wt.exe` command string | `Get-LayoutCommand dual-claude` |
+| `Get-LayoutCommand <name> [-Dir <path>]` | Output the raw `wt.exe` command string | `Get-LayoutCommand dual-pane` |
+| `New-ClaudeProfile` | Inject a `Claude` WT profile into settings.json | `New-ClaudeProfile` |
 
 ### Cheatsheet Function
 
@@ -113,6 +119,7 @@ Categories: `theme`, `pane`, `config`, `keys`, `all` (default).
   Get-LayoutList                Show all layouts
   Save-Layout <name> -Panes .. Save custom layout
   Get-LayoutCommand <name>      Export wt.exe command
+  New-ClaudeProfile             Create Claude WT profile
 
  CONFIG
   Sync-Config push|pull         Sync local <-> repo
@@ -176,11 +183,16 @@ Output (inside terminal):
     ';', 'split-pane', '-H', '-p', 'PowerShell', '-d', 'C:\proj')
 ```
 
-Mapping: `vertical` → `-V`, `horizontal` → `-H`, `profile` → `-p "<name>"`, `title` → `--title "<text>"`, `size` → `--size <float>`.
+Mapping: `vertical` → `-V`, `horizontal` → `-H`, `profile` → `-p`, `<name>` (two separate array elements — `Start-Process` handles quoting), `title` → `--title`, `<text>`, `size` → `--size`, `<float>`.
+
+**WT profile validation timing:** Profiles are validated at `Open-Layout` call time (not cached at profile load). This reads WT `settings.json` once per `Open-Layout` invocation to check `profiles.list[].name`. Acceptable cost (~2ms) and ensures renamed/new profiles are detected immediately.
 
 ### `Save-Layout`
 
-**Parameter-only mode** (requires `-Panes`). No interactive prompts — keeps function pipeline-safe:
+**Parameter-only mode** (requires `-Panes`). No interactive prompts — keeps function pipeline-safe.
+
+**Overwrite behavior:** If a custom layout with the same name already exists, it is silently overwritten (consistent with `New-PnxTheme` using `Add-Member -Force`). Predefined layouts cannot be overwritten — `Save-Layout` with a predefined name returns an error.
+
 ```powershell
 Save-Layout my-setup -Description "My daily workflow" -Panes @(
   @{ profile="Claude"; dir="."; split="root" },
@@ -190,11 +202,12 @@ Save-Layout my-setup -Description "My daily workflow" -Panes @(
 
 ### `Get-LayoutCommand` — Shortcut Generator
 
-Outputs the raw `wt.exe` command for use in `.bat` files or Windows shortcuts:
+Outputs the raw `wt.exe` command for use in `.bat` files or Windows shortcuts (NOT for direct PowerShell paste — `;` is a wt.exe subcommand separator, not a PowerShell statement separator):
 
 ```powershell
-Get-LayoutCommand dual-claude -Dir "C:\myproject"
-# → wt.exe -p "Claude" -d "C:\myproject" ; split-pane -V -p "Claude" -d "C:\myproject"
+Get-LayoutCommand dual-pane -Dir "C:\myproject"
+# → wt.exe -p "PowerShell" -d "C:\myproject" ; split-pane -V -p "PowerShell" -d "C:\myproject"
+# (copy this into a .bat file or Windows shortcut target)
 ```
 
 ### Argument Completion
@@ -243,8 +256,8 @@ Layouts are pure data read at profile load time — same pattern as ThemeDB. No 
 ## `$LayoutDB` Variable
 
 - **Type:** `[hashtable]` — key = layout name, value = `@{ description = [string]; panes = [array] }`
-- **Scope:** `$Script:LayoutDB` (same scope as `$ThemeDB`)
-- **Merge strategy:** Overwrite by key — custom layout with same name as predefined replaces it entirely (same as ThemeDB custom theme override)
+- **Scope:** `$LayoutDB` (no `$Script:` prefix — consistent with `$ThemeDB`)
+- **Merge strategy:** Predefined wins — custom layouts with the same name as a predefined layout are ignored (same as ThemeDB: `if (-not $LayoutDB.ContainsKey($name)) { ... }`). Users who want variants should use distinct names (e.g., `my-dual-claude`).
 - **Loaded at:** Profile startup, after ThemeDB/StyleDB
 
 ## Validation Rules
@@ -256,7 +269,7 @@ Validation runs in both `Save-Layout` (write time) and `Open-Layout` (runtime, i
 3. `profile`: must be `$null` or a string matching an installed WT profile name. Unknown profiles → warning + fallback to WT default
 4. `panes` array must have at least 1 entry
 5. `dir` must be `"."` or a valid path — warning (non-blocking) if absolute path does not exist
-6. `size` (if present): must be a float between 0.0 and 1.0 exclusive
+6. `size` (if present): must be a float in the range (0.0, 1.0) — exclusive on both ends (0.0 and 1.0 are invalid)
 7. `parent` field is ignored in V1 with a warning: `"'parent' field is reserved for future use, ignored in V1"`
 
 ## Risk Analysis & Mitigation
@@ -294,7 +307,8 @@ Validation runs in both `Save-Layout` (write time) and `Open-Layout` (runtime, i
 3. **`parent` field (V1)**: Reserved for future use. WT's internal pane indexing uses a binary tree that shifts when panes are split, making arbitrary `--target-pane` targeting unreliable. V1 uses sequential splitting only.
 4. **`$env:WT_SESSION`**: Only exists inside Windows Terminal sessions. Used to detect inside vs. outside context.
 5. **WT profile dependency**: Layouts reference WT profile names. If a profile is renamed or deleted, layouts referencing it will fall back to default with a warning.
-6. **`Claude` WT profile**: Must be manually created (or added to bootstrap) with `commandline: "claude"`. Without this profile, Claude-related layouts fall back to default shell.
+6. **`Claude` WT profile**: Optional. Created via `New-ClaudeProfile` helper (injects profile with `commandline: "claude"` into WT settings.json using `Save-WtSettings`). Not required — all predefined layouts use `"PowerShell"`. Users opt in when ready.
+7. **`description` field**: Optional in layout schema. `Get-LayoutList` shows empty string if omitted.
 
 ## Test Plan
 
@@ -314,4 +328,10 @@ Validation runs in both `Save-Layout` (write time) and `Open-Layout` (runtime, i
 - `Show-Cheatsheet`: verify output for each category filter
 - `Show-Cheatsheet` with unknown category: verify error message
 - Corrupted `layouts.json`: verify graceful degradation + health warning
+- `Save-Layout` overwrite existing custom: verify silent overwrite
+- `Save-Layout` with predefined name: verify error rejection
+- `New-ClaudeProfile`: verify profile injected into WT settings.json
+- `New-ClaudeProfile` when profile already exists: verify skip with message
+- `Get-LayoutList`: verify predefined wins over custom with same name
+- `Get-LayoutCommand` output: verify `;` separator correct for batch/shortcut use
 - Argument completer: verify correct completions for each function
