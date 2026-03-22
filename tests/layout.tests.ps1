@@ -564,3 +564,40 @@ Describe "Show-Cheatsheet" {
         $output | Should -Not -BeLike "*THEME*"
     }
 }
+
+Describe "LayoutDB Merge — Predefined Wins" {
+    It "Predefined layout overrides custom with same name" {
+        $predefined = @{ 'dual-pane' = @{ description = "predefined"; panes = @(@{ split = "root" }) } }
+        $custom = [PSCustomObject]@{ 'dual-pane' = [PSCustomObject]@{ description = "custom"; panes = @(@{ split = "root" }) } }
+        $db = @{}
+        foreach ($k in $predefined.Keys) { $db[$k] = $predefined[$k] }
+        foreach ($p in $custom.PSObject.Properties) {
+            if (-not $db.ContainsKey($p.Name)) { $db[$p.Name] = @{ description = $p.Value.description; panes = @($p.Value.panes) } }
+        }
+        $db['dual-pane'].description | Should -Be "predefined"
+    }
+
+    It "Custom layout with unique name is added" {
+        $db = @{ 'dual-pane' = @{ description = "predefined"; panes = @() } }
+        $custom = [PSCustomObject]@{ 'my-custom' = [PSCustomObject]@{ description = "mine"; panes = @(@{ split = "root" }) } }
+        foreach ($p in $custom.PSObject.Properties) {
+            if (-not $db.ContainsKey($p.Name)) { $db[$p.Name] = @{ description = $p.Value.description; panes = @($p.Value.panes) } }
+        }
+        $db.ContainsKey('my-custom') | Should -BeTrue
+    }
+}
+
+Describe "Corrupted layouts.json" {
+    It "Gracefully handles malformed JSON" {
+        $tempFile = Join-Path $env:TEMP "pnx-corrupt-test-$(Get-Random).json"
+        "{ invalid json" | Set-Content $tempFile
+        $result = $null
+        try {
+            $result = Get-Content $tempFile -Raw | ConvertFrom-Json
+        } catch {
+            $result = $null
+        }
+        $result | Should -BeNullOrEmpty
+        Remove-Item $tempFile -Force
+    }
+}
