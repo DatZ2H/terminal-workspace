@@ -1,13 +1,15 @@
-# Pane Management — Design Spec
+# Pane Management & Cheatsheet — Design Spec
 
 ## Overview
 
-Add pane layout management to the terminal workspace, optimized for Multi-Claude Code CLI workflows. Supports predefined + user-saved layouts, same/different project directories, launchable from both inside and outside Windows Terminal.
+Add pane layout management and a discoverable cheatsheet to the terminal workspace. Optimized for Multi-Claude Code CLI workflows but works for any terminal use case. Supports predefined + user-saved layouts, same/different project directories, launchable from both inside and outside Windows Terminal.
 
 **Key decisions:**
 - Theme system stays independent — pane management does not interact with themes/styles
 - Uses `wt.exe` CLI as the engine (Microsoft-supported, reliable)
 - Layout data follows existing ThemeDB pattern (repo JSON + local JSON merge)
+- **Security: no raw commands in JSON** — uses WT profile names + whitelisted launch args instead
+- Pane functions extracted to separate file (`scripts/pane-layout.ps1`) to keep profile.ps1 manageable
 
 ## Data Model
 
@@ -28,9 +30,11 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
       "description": "Human-readable description",
       "panes": [
         {
-          "command": "claude | pwsh | null (default shell)",
+          "profile": "PowerShell | Claude | null (WT default profile)",
           "dir": ". (resolves to $PWD or -Dir param) | absolute path",
           "split": "root | vertical | horizontal",
+          "title": "optional pane title",
+          "size": 0.5,
           // "parent" field reserved for V2 — do not use in V1
         }
       ]
@@ -40,71 +44,147 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
 ```
 
 **Field details:**
-- `command`: Command to run in the pane. `"claude"` for Claude Code, `"pwsh"` for PowerShell, `null` for default shell.
+- `profile`: Windows Terminal profile name (must exist in WT `profiles.list[]`). `null` = WT default profile. Validated against installed profiles at runtime.
 - `dir`: Working directory. `"."` is resolved at runtime to `$PWD` or the `-Dir` parameter value.
 - `split`: `"root"` = first pane (tab), `"vertical"` = split right, `"horizontal"` = split down.
-- `parent` (optional): **V1 limitation — sequential split only.** Each pane splits from the previous pane (default behavior). The `parent` field is reserved for future use when WT pane indexing can be reliably mapped. In V1, omit this field.
+- `title` (optional): Pane tab title. Passed as `--title` to `wt.exe`.
+- `size` (optional): Split ratio as float 0.0–1.0 (default 0.5). Passed as `--size` to `wt.exe`.
+- `parent` (optional): **V1 limitation — sequential split only.** Each pane splits from the previous pane. Reserved for V2.
+
+### WT Profile Mapping
+
+Layouts reference WT profile names, not raw commands. This provides security (no arbitrary command execution) and integration (inherits profile's icon, font, color scheme, startup command).
+
+Expected WT profiles (validated at runtime):
+- `"PowerShell"` — default pwsh profile
+- `"Claude"` — custom WT profile with `commandline: "claude"` (created during bootstrap or manually)
+- `"Command Prompt"` — cmd.exe
+- `null` — WT default profile
+
+If a referenced profile does not exist, `Open-Layout` warns and falls back to the default profile.
 
 ### Predefined Layouts
 
 | Name | Description | Layout |
 |------|-------------|--------|
-| `dual-claude` | Two Claude Code instances side by side | `[claude \| claude]` |
-| `claude-terminal` | Claude Code + plain shell | `[claude \| pwsh]` |
-| `triple-claude` | 3 Claude: 2 top + 1 bottom | `[claude \| claude]` + `[claude below]` (sequential split) |
-| `claude-dev` | Claude + terminal + git log | `[claude \| pwsh]` + `[git log below]` (sequential split) |
+| `dual-claude` | Two Claude Code instances side by side | `[Claude \| Claude]` |
+| `claude-terminal` | Claude Code + plain shell | `[Claude \| PowerShell]` |
+| `triple-claude` | 3 Claude: 2 top + 1 bottom | `[Claude \| Claude]` + `[Claude below]` |
+| `claude-dev` | Claude + terminal + git log | `[Claude \| PowerShell]` + `[PowerShell below]` |
+| `dev-split` | Two shells side by side (no Claude) | `[PowerShell \| PowerShell]` |
+| `dev-workspace` | Shell + shell + monitoring | `[PowerShell \| PowerShell]` + `[PowerShell below]` |
 
 ## Commands & Functions
 
-### Core Functions
+### Pane Functions
 
 | Function | Description | Example |
 |----------|-------------|---------|
 | `Open-Layout <name> [-Dir <path>] [-NewWindow]` | Open a layout by name | `Open-Layout dual-claude` |
-| `Save-Layout <name> [-Panes <config>]` | Save a new layout to local JSON | `Save-Layout my-setup` |
+| `Save-Layout <name> -Panes <config> [-Description <text>]` | Save a new layout to local JSON | `Save-Layout my-setup -Panes @(...)` |
 | `Remove-Layout <name>` | Delete a custom layout (predefined are protected) | `Remove-Layout old-setup` |
 | `Get-LayoutList` | Display all available layouts (predefined + custom) | `Get-LayoutList` |
 | `Get-LayoutCommand <name> [-Dir <path>]` | Output the raw `wt.exe` command string | `Get-LayoutCommand dual-claude` |
 
+### Cheatsheet Function
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `Show-Cheatsheet [<category>]` | Display categorized command reference | `Show-Cheatsheet pane` |
+
+Categories: `theme`, `pane`, `config`, `keys`, `all` (default).
+
+**Output example:**
+```
+ PNX Terminal Cheatsheet
+─────────────────────────────────────────────
+
+ THEME
+  Set-Theme <name> [style]     Switch theme (e.g., Set-Theme tokyo mac)
+  Get-ThemeList                 Show all available themes
+  Set-Style <style>             Switch style only (mac/win/linux)
+  Select-ThemeInteractive       Arrow-key theme picker
+  New-PnxTheme -Name <n> ...   Create custom theme
+  Test-ThemeIntegrity           Validate theme components
+
+ PANE LAYOUTS
+  Open-Layout <name>            Open a pane layout
+  Open-Layout <name> -NewWindow Open in new window
+  Get-LayoutList                Show all layouts
+  Save-Layout <name> -Panes .. Save custom layout
+  Get-LayoutCommand <name>      Export wt.exe command
+
+ CONFIG
+  Sync-Config push|pull         Sync local <-> repo
+  Update-Workspace              Pull + redeploy + reload
+  Get-Status                    Health check
+  Update-Tools                  Update all packages
+  Deploy-ClaudeConfig           Deploy Claude configs
+
+ KEYBOARD SHORTCUTS (Windows Terminal)
+  Alt+Shift+D                   Auto split pane
+  Alt+Shift++ / Alt+Shift+-     Split vertical / horizontal
+  Alt+Arrow                     Move focus between panes
+  Alt+Shift+Arrow               Resize pane
+  Ctrl+Shift+W                  Close pane
+  Ctrl+Shift+T                  New tab
+  Ctrl+Tab / Ctrl+Shift+Tab     Next / previous tab
+
+  Type Show-Cheatsheet <category> to filter.
+```
+
+### Welcome Line
+
+Added to profile load output (after health check):
+
+```
+PNX Terminal | tokyo (mac) | Show-Cheatsheet for help
+```
+
+Single line, non-intrusive. Only shown in interactive sessions (not in scripts).
+
 ### `Open-Layout` Logic
 
-1. Read `$LayoutDB` (already loaded at profile startup)
-2. Lookup layout by name → get `panes[]` array
-3. Resolve `dir`: `"."` → `-Dir` parameter or `$PWD`
-4. Call `Build-WtCommand` (helper in `common.ps1`) → build `wt.exe` argument string
-5. Detect context via `$env:WT_SESSION`:
+1. Guard: check `wt.exe` available → if not, `Write-Warning` and return
+2. Read `$LayoutDB` (already loaded at profile startup)
+3. Lookup layout by name → if not found, list available layouts and return
+4. Validate panes (see Validation Rules)
+5. Resolve `dir`: `"."` → `-Dir` parameter or `$PWD`
+6. Validate all `dir` paths exist → warn (non-blocking) for missing paths
+7. Validate all `profile` names exist in WT → warn and fall back to default for missing profiles
+8. Call `Build-WtCommand` (helper in `scripts/pane-layout.ps1`) → build argument list
+9. Detect context via `$env:WT_SESSION`:
    - **Inside terminal (default)** → prepend `-w 0 nt` (new tab in current window)
    - **Inside terminal + `-NewWindow`** → omit `-w 0` (opens new window)
    - **Outside terminal** → omit `-w 0` (opens new window)
-6. Execute `wt.exe` with built arguments
+10. Execute via `Start-Process wt -ArgumentList $args` (safe, no string interpolation)
 
 ### `Build-WtCommand` Logic
 
-Converts a panes array into `wt.exe` CLI syntax:
+Converts a panes array into `wt.exe` argument list (returns `[string[]]`, NOT a concatenated string):
 
 ```
 Input:  panes = [
-  { command: "claude", dir: "C:\proj", split: "root" },
-  { command: "claude", dir: "C:\proj", split: "vertical" },
-  { command: null,     dir: "C:\proj", split: "horizontal" }
+  { profile: "Claude", dir: "C:\proj", split: "root" },
+  { profile: "Claude", dir: "C:\proj", split: "vertical", size: 0.4 },
+  { profile: "PowerShell", dir: "C:\proj", split: "horizontal" }
 ]
 
 Output (inside terminal):
-  wt.exe -w 0 nt -d "C:\proj" -- claude ; split-pane -V -d "C:\proj" -- claude ; split-pane -H -d "C:\proj"
-
-Output (outside terminal):
-  wt.exe -d "C:\proj" -- claude ; split-pane -V -d "C:\proj" -- claude ; split-pane -H -d "C:\proj"
+  @('-w', '0', 'nt', '-p', 'Claude', '-d', 'C:\proj',
+    ';', 'split-pane', '-V', '--size', '0.4', '-p', 'Claude', '-d', 'C:\proj',
+    ';', 'split-pane', '-H', '-p', 'PowerShell', '-d', 'C:\proj')
 ```
 
-Mapping: `vertical` → `-V`, `horizontal` → `-H`. Each pane splits from the previously created pane (sequential).
+Mapping: `vertical` → `-V`, `horizontal` → `-H`, `profile` → `-p "<name>"`, `title` → `--title "<text>"`, `size` → `--size <float>`.
 
-### `Save-Layout` — Two Modes
+### `Save-Layout`
 
 **Parameter-only mode** (requires `-Panes`). No interactive prompts — keeps function pipeline-safe:
 ```powershell
-Save-Layout quick -Panes @(
-  @{ command="claude"; dir="."; split="root" },
-  @{ command="claude"; dir="."; split="vertical" }
+Save-Layout my-setup -Description "My daily workflow" -Panes @(
+  @{ profile="Claude"; dir="."; split="root" },
+  @{ profile="PowerShell"; dir="."; split="vertical" }
 )
 ```
 
@@ -114,7 +194,7 @@ Outputs the raw `wt.exe` command for use in `.bat` files or Windows shortcuts:
 
 ```powershell
 Get-LayoutCommand dual-claude -Dir "C:\myproject"
-# → wt.exe -d "C:\myproject" -- claude ; split-pane -V -d "C:\myproject" -- claude
+# → wt.exe -p "Claude" -d "C:\myproject" ; split-pane -V -p "Claude" -d "C:\myproject"
 ```
 
 ### Argument Completion
@@ -122,15 +202,16 @@ Get-LayoutCommand dual-claude -Dir "C:\myproject"
 Tab completion for all layout functions, following existing `Register-ArgumentCompleter` pattern:
 - `Open-Layout <Tab>` → all layouts (predefined + custom)
 - `Remove-Layout <Tab>` → custom layouts only (predefined protected)
+- `Show-Cheatsheet <Tab>` → `theme`, `pane`, `config`, `keys`, `all`
 
 ## File Changes
 
 | File | Action | What Changes |
 |------|--------|-------------|
 | `configs/layouts.json` | **Create** | Predefined layouts data |
-| `configs/profile.ps1` | **Edit** | Add layout functions (`Open-Layout`, `Save-Layout`, `Remove-Layout`, `Get-LayoutList`, `Get-LayoutCommand`), `$LayoutDB` loading, argument completers |
-| `scripts/common.ps1` | **Edit** | Add `Build-WtCommand` helper |
-| `tests/layout.tests.ps1` | **Create** | Pester tests for layout functions |
+| `scripts/pane-layout.ps1` | **Create** | All pane functions + `Build-WtCommand` + `Show-Cheatsheet` |
+| `configs/profile.ps1` | **Edit** | Dot-source `pane-layout.ps1`, load `$LayoutDB`, add welcome line, register argument completers |
+| `tests/layout.tests.ps1` | **Create** | Pester tests for layout + cheatsheet functions |
 | `bootstrap.ps1` | **No change** | Layouts load at profile time, no deploy step needed |
 | `scripts/sync-to-repo.ps1` | **No change** | `configs/layouts.json` tracked by git |
 | `scripts/sync-from-repo.ps1` | **No change** | Layouts reload on next profile load |
@@ -141,9 +222,12 @@ Tab completion for all layout functions, following existing `Register-ArgumentCo
 
 ```
 ... (existing: ThemeDB, StyleDB, OMP, zoxide) ...
+├─ Dot-source scripts/pane-layout.ps1
 ├─ Read configs/layouts.json → $LayoutDB (predefined)
 ├─ Read %LOCALAPPDATA%\pnx-terminal\layouts.json → merge on top (custom)
-└─ Register-ArgumentCompleter for Open-Layout, Remove-Layout
+├─ Check wt.exe availability → add to $_healthIssues if missing
+├─ Register-ArgumentCompleter for Open-Layout, Remove-Layout, Show-Cheatsheet
+└─ Welcome line: "PNX Terminal | <theme> (<style>) | Show-Cheatsheet for help"
 ```
 
 ### No Bootstrap Changes
@@ -169,23 +253,65 @@ Validation runs in both `Save-Layout` (write time) and `Open-Layout` (runtime, i
 
 1. `panes[0].split` must be `"root"` — error: `"Layout '<name>': first pane must have split 'root'"`
 2. `split` values must be one of: `root`, `vertical`, `horizontal`
-3. `command`: any non-empty string is valid (e.g., `"claude"`, `"pwsh"`, `"git log --oneline --graph"`). `$null` maps to default shell.
+3. `profile`: must be `$null` or a string matching an installed WT profile name. Unknown profiles → warning + fallback to WT default
 4. `panes` array must have at least 1 entry
-5. `dir` must be a valid path or `"."` — warning if absolute path does not exist (non-blocking)
-6. `parent` field is ignored in V1 with a warning: `"'parent' field is reserved for future use, ignored in V1"`
+5. `dir` must be `"."` or a valid path — warning (non-blocking) if absolute path does not exist
+6. `size` (if present): must be a float between 0.0 and 1.0 exclusive
+7. `parent` field is ignored in V1 with a warning: `"'parent' field is reserved for future use, ignored in V1"`
+
+## Risk Analysis & Mitigation
+
+### Critical
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Command injection via layout data** | Arbitrary code execution if layouts.json stores raw commands | **Eliminated by design:** `profile` field references WT profile names only (validated against installed profiles). No raw command strings in JSON. Execution via `Start-Process` with argument array, never string interpolation. |
+| **`wt.exe` not installed** | All pane functions fail | Guard check at profile load (`Get-Command wt -EA SilentlyContinue`). Add to `$_healthIssues`. Functions return early with `Write-Warning`. Other workspace features unaffected. |
+
+### Medium
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Corrupted `layouts.json`** | Layout loading fails | Try/catch around `ConvertFrom-Json`. Add to `$_healthIssues`. Profile continues loading. Follows existing ThemeDB pattern. |
+| **Paths with special characters** | `wt.exe` argument parsing breaks | Use `Start-Process -ArgumentList` with array (not string concat). Each argument is a separate array element — shell escaping handled by .NET. |
+| **Non-existent directory in `dir`** | `wt.exe` opens to wrong/default dir | `Test-Path` check before execution. Warning for missing paths. Non-blocking (pane still opens with fallback dir). |
+| **Missing WT profile referenced in layout** | `wt.exe` error or falls back silently | Query installed profiles via WT settings.json `profiles.list[].name`. Warn + use default profile for unknown names. |
+| **`%LOCALAPPDATA%` write failure** | Cannot save custom layouts | Try/catch on directory creation + file write. Fallback to `$env:TEMP\pnx-terminal`. Health warning. |
+| **Profile load time increase** | Terminal opens slower | `layouts.json` is small (<5KB). Single `ConvertFrom-Json` call adds <5ms. No caching needed — unlike OMP/zoxide init which take 100-500ms. |
+
+### Low
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Function name conflicts** | Overwrites user's custom function | No conflicts found with built-in cmdlets or common modules. Verb-Noun convention matches existing functions. |
+| **`$env:WT_SESSION` false negative** | Opens new window instead of new tab | Edge case with nested terminals or custom environments. Documented in Constraints. `-NewWindow` flag provides explicit control. |
+| **Concurrent `Set-Theme` + `Open-Layout`** | No conflict — different mechanisms | `Set-Theme` writes `settings.json` via `Save-WtSettings`. `Open-Layout` calls `wt.exe` CLI (creates panes, does not write settings). No shared resource. |
 
 ## Constraints & Limitations
 
-1. **No auto-detect of current pane state**: Windows Terminal does not expose an API to query open panes. `Save-Layout` requires manual input.
-2. **No pane resize**: `wt.exe` supports `--size` at split time but not resizing existing panes. Layouts define split direction only.
-3. **`parent` field (V1)**: Reserved for future use. WT's internal pane indexing uses a binary tree that shifts when panes are split, making arbitrary `--target-pane` targeting unreliable. V1 uses sequential splitting only (each pane splits from the previous one).
+1. **No auto-detect of current pane state**: Windows Terminal does not expose an API to query open panes. `Save-Layout` requires manual input via `-Panes` parameter.
+2. **No pane resize after creation**: `wt.exe` supports `--size` at split time but not resizing existing panes. Use keyboard shortcuts (`Alt+Shift+Arrow`) for manual resize.
+3. **`parent` field (V1)**: Reserved for future use. WT's internal pane indexing uses a binary tree that shifts when panes are split, making arbitrary `--target-pane` targeting unreliable. V1 uses sequential splitting only.
 4. **`$env:WT_SESSION`**: Only exists inside Windows Terminal sessions. Used to detect inside vs. outside context.
+5. **WT profile dependency**: Layouts reference WT profile names. If a profile is renamed or deleted, layouts referencing it will fall back to default with a warning.
+6. **`Claude` WT profile**: Must be manually created (or added to bootstrap) with `commandline: "claude"`. Without this profile, Claude-related layouts fall back to default shell.
 
 ## Test Plan
 
-- `Build-WtCommand` unit tests: various pane configs → expected `wt.exe` argument strings
-- `Open-Layout` with mocked `wt.exe`: verify correct arguments passed
+- `Build-WtCommand` unit tests: various pane configs → expected argument arrays
+- `Build-WtCommand` with `size` and `title` fields → verify `--size` and `--title` flags
+- `Open-Layout` with mocked `Start-Process`: verify correct arguments passed
+- `Open-Layout` inside vs outside terminal: verify `-w 0 nt` presence/absence
+- `Open-Layout` with `-NewWindow`: verify `-w 0` is omitted
+- `Open-Layout` with missing `wt.exe`: verify warning and early return
+- `Open-Layout` with missing WT profile: verify fallback + warning
+- `Open-Layout` with non-existent `dir`: verify warning (non-blocking)
 - `Save-Layout` / `Remove-Layout`: verify local JSON read/write
+- `Remove-Layout` on predefined layout: verify rejection
 - `Get-LayoutList`: verify merge of predefined + custom layouts
-- Layout validation: reject invalid split values, missing root pane, verify `parent` field is ignored with warning in V1
+- Layout validation: reject invalid split values, missing root pane, invalid size range
+- `parent` field: verify ignored with warning in V1
+- `Show-Cheatsheet`: verify output for each category filter
+- `Show-Cheatsheet` with unknown category: verify error message
+- Corrupted `layouts.json`: verify graceful degradation + health warning
 - Argument completer: verify correct completions for each function
