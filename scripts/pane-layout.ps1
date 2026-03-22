@@ -205,3 +205,77 @@ function Open-Layout {
 
     Start-Process wt -ArgumentList $finalArgs
 }
+
+# -- Save a custom layout --
+function Save-Layout {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)][string]$Name,
+        [Parameter(Mandatory)][array]$Panes,
+        [string]$Description = ""
+    )
+
+    if ($_predefinedLayoutNames -contains $Name) {
+        Write-Warning "Cannot save layout '$Name' — it is a predefined layout. Use a different name."
+        return
+    }
+
+    $validation = Test-LayoutPanes -Panes $Panes -LayoutName $Name
+    foreach ($w in $validation.Warnings) { Write-Warning $w }
+    if (-not $validation.Valid) {
+        foreach ($e in $validation.Errors) { Write-Host "  $e" -ForegroundColor Red }
+        return
+    }
+
+    $LayoutDB[$Name] = @{ description = $Description; panes = $Panes }
+
+    $dir = Split-Path $_customLayoutPath -Parent
+    try {
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $existing = if (Test-Path $_customLayoutPath) {
+            try { Get-Content $_customLayoutPath -Raw | ConvertFrom-Json } catch { [PSCustomObject]@{} }
+        } else { [PSCustomObject]@{} }
+
+        $existing | Add-Member -NotePropertyName $Name -NotePropertyValue ([PSCustomObject]@{
+            description = $Description
+            panes       = $Panes
+        }) -Force
+
+        $existing | ConvertTo-Json -Depth 10 | Set-Content $_customLayoutPath -Encoding utf8NoBOM
+        Write-Host "  Layout '$Name' saved." -ForegroundColor Green
+    } catch {
+        Write-Warning "Failed to save layout: $_"
+    }
+}
+
+# -- Remove a custom layout --
+function Remove-Layout {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)][string]$Name
+    )
+
+    if ($_predefinedLayoutNames -contains $Name) {
+        Write-Warning "Cannot remove '$Name' — it is a predefined layout."
+        return
+    }
+
+    if (-not $LayoutDB.ContainsKey($Name)) {
+        Write-Warning "Layout '$Name' not found."
+        return
+    }
+
+    $LayoutDB.Remove($Name)
+
+    if (Test-Path $_customLayoutPath) {
+        try {
+            $existing = Get-Content $_customLayoutPath -Raw | ConvertFrom-Json
+            $existing.PSObject.Properties.Remove($Name)
+            $existing | ConvertTo-Json -Depth 10 | Set-Content $_customLayoutPath -Encoding utf8NoBOM
+        } catch {
+            Write-Warning "Failed to update layout file: $_"
+        }
+    }
+
+    Write-Host "  Layout '$Name' removed." -ForegroundColor Green
+}

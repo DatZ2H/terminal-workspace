@@ -321,3 +321,105 @@ Describe "Open-Layout" {
         $script:LayoutDB.Remove('test-bad-dir')
     }
 }
+
+Describe "Save-Layout" {
+    BeforeAll {
+        $script:_tempCustomDir = Join-Path ([System.IO.Path]::GetTempPath()) "pnx-test-save-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        New-Item -ItemType Directory -Path $script:_tempCustomDir -Force | Out-Null
+        $script:_customLayoutPath = Join-Path $script:_tempCustomDir "custom-layouts.json"
+        $script:_predefinedLayoutNames = @('dual-pane', 'triple-pane', 'dev-monitor', 'side-by-side')
+        $script:LayoutDB = @{}
+    }
+
+    BeforeEach {
+        $script:LayoutDB = @{}
+        Remove-Item $script:_customLayoutPath -Force -ErrorAction SilentlyContinue
+    }
+
+    AfterAll {
+        Remove-Item -Path $script:_tempCustomDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Saves a new custom layout to LayoutDB and file" {
+        $panes = @(
+            @{ profile = "PowerShell"; dir = "."; split = "root" },
+            @{ profile = "PowerShell"; dir = "."; split = "vertical" }
+        )
+        $output = Save-Layout -Name 'my-layout' -Panes $panes -Description "My custom layout" 6>&1 | Out-String
+        $output | Should -BeLike "*saved*"
+        $script:LayoutDB.ContainsKey('my-layout') | Should -BeTrue
+        $script:LayoutDB['my-layout'].description | Should -Be "My custom layout"
+        Test-Path $script:_customLayoutPath | Should -BeTrue
+        $json = Get-Content $script:_customLayoutPath -Raw | ConvertFrom-Json
+        $json.'my-layout' | Should -Not -BeNullOrEmpty
+    }
+
+    It "Overwrites existing custom layout silently" {
+        $panes1 = @( @{ profile = "PowerShell"; dir = "."; split = "root" } )
+        $panes2 = @(
+            @{ profile = "PowerShell"; dir = "."; split = "root" },
+            @{ profile = "PowerShell"; dir = "."; split = "horizontal" }
+        )
+        Save-Layout -Name 'overwrite-me' -Panes $panes1 -Description "V1" 6>&1 | Out-Null
+        Save-Layout -Name 'overwrite-me' -Panes $panes2 -Description "V2" 6>&1 | Out-Null
+        $script:LayoutDB['overwrite-me'].description | Should -Be "V2"
+        @($script:LayoutDB['overwrite-me'].panes).Count | Should -Be 2
+    }
+
+    It "Rejects predefined layout name" {
+        $panes = @( @{ profile = "PowerShell"; dir = "."; split = "root" } )
+        $output = Save-Layout -Name 'dual-pane' -Panes $panes 3>&1 | Out-String
+        $output | Should -BeLike "*predefined*"
+    }
+
+    It "Rejects invalid panes" {
+        $panes = @( @{ profile = "PowerShell"; dir = "."; split = "diagonal" } )
+        Save-Layout -Name 'bad-panes' -Panes $panes 3>&1 6>&1 | Out-Null
+        $script:LayoutDB.ContainsKey('bad-panes') | Should -BeFalse
+    }
+}
+
+Describe "Remove-Layout" {
+    BeforeAll {
+        $script:_tempCustomDir2 = Join-Path ([System.IO.Path]::GetTempPath()) "pnx-test-rm-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        New-Item -ItemType Directory -Path $script:_tempCustomDir2 -Force | Out-Null
+        $script:_customLayoutPath = Join-Path $script:_tempCustomDir2 "custom-layouts.json"
+        $script:_predefinedLayoutNames = @('dual-pane', 'triple-pane', 'dev-monitor', 'side-by-side')
+    }
+
+    BeforeEach {
+        $script:LayoutDB = @{
+            'my-custom' = @{
+                description = 'Custom layout'
+                panes = @( @{ profile = "PowerShell"; dir = "."; split = "root" } )
+            }
+        }
+        # Write matching custom file
+        @{ 'my-custom' = @{ description = 'Custom layout'; panes = @( @{ profile = "PowerShell"; dir = "."; split = "root" } ) } } |
+            ConvertTo-Json -Depth 5 | Set-Content $script:_customLayoutPath -Encoding utf8NoBOM
+    }
+
+    AfterAll {
+        Remove-Item -Path $script:_tempCustomDir2 -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Removes a custom layout from LayoutDB and file" {
+        $output = Remove-Layout -Name 'my-custom' 6>&1 | Out-String
+        $output | Should -BeLike "*removed*"
+        $script:LayoutDB.ContainsKey('my-custom') | Should -BeFalse
+        $json = Get-Content $script:_customLayoutPath -Raw | ConvertFrom-Json
+        $json.PSObject.Properties.Name | Should -Not -Contain 'my-custom'
+    }
+
+    It "Rejects removing predefined layout" {
+        $script:LayoutDB['dual-pane'] = @{ description = 'test'; panes = @() }
+        $output = Remove-Layout -Name 'dual-pane' 3>&1 | Out-String
+        $output | Should -BeLike "*predefined*"
+        $script:LayoutDB.ContainsKey('dual-pane') | Should -BeTrue
+    }
+
+    It "Warns when layout not found" {
+        $output = Remove-Layout -Name 'nonexistent' 3>&1 | Out-String
+        $output | Should -BeLike "*not found*"
+    }
+}
