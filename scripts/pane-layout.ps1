@@ -5,10 +5,10 @@
 
 # Default paths — profile.ps1 sets these before dot-sourcing, but provide
 # fallbacks for standalone use. Uses script-scope to not shadow caller's variables.
-if (-not (Get-Variable _customLayoutPath -Scope 1 -ErrorAction SilentlyContinue)) {
+if (-not (Get-Variable _customLayoutPath -ValueOnly -ErrorAction SilentlyContinue)) {
     $script:_customLayoutPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\layouts.json"
 }
-if (-not (Get-Variable _predefinedLayoutNames -Scope 1 -ErrorAction SilentlyContinue)) {
+if (-not (Get-Variable _predefinedLayoutNames -ValueOnly -ErrorAction SilentlyContinue)) {
     $script:_predefinedLayoutNames = @()
 }
 
