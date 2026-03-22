@@ -198,3 +198,126 @@ Describe "Get-LayoutList" {
         $script:LayoutDB = $savedDB
     }
 }
+
+Describe "Open-Layout" {
+    BeforeAll {
+        $script:LayoutDB = @{
+            'dual-pane' = @{
+                description = 'Two shells side by side'
+                panes = @(
+                    @{ profile = "PowerShell"; dir = "."; split = "root" },
+                    @{ profile = "PowerShell"; dir = "."; split = "vertical" }
+                )
+            }
+        }
+
+        # Create a temporary WT settings file with known profiles
+        $script:_tempWtDir = Join-Path ([System.IO.Path]::GetTempPath()) "pnx-test-wt-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        New-Item -ItemType Directory -Path $script:_tempWtDir -Force | Out-Null
+        $script:WtSettingsPath = Join-Path $script:_tempWtDir "settings.json"
+        @{
+            profiles = @{
+                list = @(
+                    @{ name = "PowerShell"; guid = "{test-1}" },
+                    @{ name = "Command Prompt"; guid = "{test-2}" }
+                )
+            }
+        } | ConvertTo-Json -Depth 5 | Set-Content $script:WtSettingsPath -Encoding utf8NoBOM
+
+        # Mock Start-Process to capture calls instead of launching wt.exe
+        $script:_startProcessCalls = @()
+        function global:Start-Process {
+            param([string]$FilePath, [string[]]$ArgumentList)
+            $script:_startProcessCalls += @{ FilePath = $FilePath; ArgumentList = $ArgumentList }
+        }
+
+        # Mock Get-Command to simulate wt.exe being available
+        # (We don't mock it — wt.exe is likely installed. We'll mock it only for the missing test.)
+    }
+
+    BeforeEach {
+        $script:_startProcessCalls = @()
+        # Ensure WT_SESSION is not set by default
+        $env:WT_SESSION = $null
+    }
+
+    AfterAll {
+        Remove-Item -Path $script:_tempWtDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item function:\global:Start-Process -ErrorAction SilentlyContinue
+    }
+
+    It "Calls Start-Process with correct args for known layout" {
+        Open-Layout -Name 'dual-pane' -Dir "C:\Test"
+        $script:_startProcessCalls.Count | Should -Be 1
+        $call = $script:_startProcessCalls[0]
+        $call.FilePath | Should -Be 'wt'
+        $joined = $call.ArgumentList -join " "
+        $joined | Should -BeLike "*-p PowerShell*"
+        $joined | Should -BeLike "*-d C:\Test*"
+    }
+
+    It "Warns for unknown layout" {
+        $output = Open-Layout -Name 'nonexistent' 3>&1 | Out-String
+        $output | Should -BeLike "*not found*"
+        $script:_startProcessCalls.Count | Should -Be 0
+    }
+
+    It "Warns when wt.exe is missing" {
+        # Temporarily rename Get-Command to simulate wt not found
+        Mock Get-Command { return $null } -ParameterFilter { $Name -eq 'wt' }
+        $output = Open-Layout -Name 'dual-pane' 3>&1 | Out-String
+        $output | Should -BeLike "*not found*"
+    }
+
+    It "Includes -w 0 nt when inside WT session" {
+        $env:WT_SESSION = "test-session-id"
+        Open-Layout -Name 'dual-pane' -Dir "C:\Test"
+        $call = $script:_startProcessCalls[0]
+        $joined = $call.ArgumentList -join " "
+        $joined | Should -BeLike "*-w 0 nt*"
+        $env:WT_SESSION = $null
+    }
+
+    It "Omits -w 0 nt with -NewWindow even inside WT" {
+        $env:WT_SESSION = "test-session-id"
+        Open-Layout -Name 'dual-pane' -Dir "C:\Test" -NewWindow
+        $call = $script:_startProcessCalls[0]
+        $joined = $call.ArgumentList -join " "
+        $joined | Should -Not -BeLike "*-w 0 nt*"
+        $env:WT_SESSION = $null
+    }
+
+    It "Omits -w 0 nt outside WT session" {
+        $env:WT_SESSION = $null
+        Open-Layout -Name 'dual-pane' -Dir "C:\Test"
+        $call = $script:_startProcessCalls[0]
+        $joined = $call.ArgumentList -join " "
+        $joined | Should -Not -BeLike "*-w 0 nt*"
+    }
+
+    It "Warns on unknown WT profile and falls back" {
+        $script:LayoutDB['test-bad-profile'] = @{
+            description = 'Test bad profile'
+            panes = @(
+                @{ profile = "NonExistentProfile"; dir = "."; split = "root" }
+            )
+        }
+        $output = Open-Layout -Name 'test-bad-profile' -Dir "C:\Test" 3>&1 | Out-String
+        $output | Should -BeLike "*not found*using default*"
+        # Should still call Start-Process (non-blocking)
+        $script:_startProcessCalls.Count | Should -Be 1
+        $script:LayoutDB.Remove('test-bad-profile')
+    }
+
+    It "Warns on non-existent directory" {
+        $script:LayoutDB['test-bad-dir'] = @{
+            description = 'Test bad dir'
+            panes = @(
+                @{ profile = "PowerShell"; dir = "C:\NonExistent12345"; split = "root" }
+            )
+        }
+        $output = Open-Layout -Name 'test-bad-dir' -Dir "C:\Test" 3>&1 | Out-String
+        $output | Should -BeLike "*does not exist*"
+        $script:LayoutDB.Remove('test-bad-dir')
+    }
+}

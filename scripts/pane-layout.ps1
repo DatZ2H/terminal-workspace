@@ -139,3 +139,69 @@ function Get-LayoutList {
     }
     Write-Host ""
 }
+
+# -- Open a layout by name --
+function Open-Layout {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)][string]$Name,
+        [string]$Dir,
+        [switch]$NewWindow
+    )
+
+    if (-not (Get-Command wt -ErrorAction SilentlyContinue)) {
+        Write-Warning "Windows Terminal (wt.exe) not found. Install via: winget install Microsoft.WindowsTerminal"
+        return
+    }
+
+    if (-not $LayoutDB -or -not $LayoutDB.ContainsKey($Name)) {
+        Write-Warning "Layout '$Name' not found. Available layouts:"
+        if ($LayoutDB) { $LayoutDB.Keys | Sort-Object | ForEach-Object { Write-Host "  $_" -ForegroundColor Cyan } }
+        return
+    }
+
+    $layout = $LayoutDB[$Name]
+    $panes = @($layout.panes)
+
+    $validation = Test-LayoutPanes -Panes $panes -LayoutName $Name
+    foreach ($w in $validation.Warnings) { Write-Warning $w }
+    if (-not $validation.Valid) {
+        foreach ($e in $validation.Errors) { Write-Host "  $e" -ForegroundColor Red }
+        return
+    }
+
+    $resolvedDir = if ($Dir) { $Dir } else { (Get-Location).Path }
+
+    # Warn on non-existent directories (non-blocking)
+    foreach ($pane in $panes) {
+        if ($pane.dir -and $pane.dir -ne '.' -and -not (Test-Path $pane.dir)) {
+            Write-Warning "Directory '$($pane.dir)' does not exist — wt.exe will use fallback."
+        }
+    }
+
+    # Validate WT profile names against installed profiles
+    if ($WtSettingsPath -and (Test-Path $WtSettingsPath)) {
+        try {
+            $wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+            $installedProfiles = @($wtJson.profiles.list | ForEach-Object { $_.name })
+            foreach ($pane in $panes) {
+                if ($pane.profile -and $pane.profile -notin $installedProfiles) {
+                    Write-Warning "WT profile '$($pane.profile)' not found — using default profile."
+                    $pane.profile = $null
+                }
+            }
+        } catch {
+            Write-Warning "Could not read WT profiles for validation."
+        }
+    }
+
+    $wtArgs = Build-WtCommand -Panes $panes -ResolvedDir $resolvedDir
+
+    $prefix = @()
+    if ($env:WT_SESSION -and -not $NewWindow) {
+        $prefix = @('-w', '0', 'nt')
+    }
+    $finalArgs = $prefix + $wtArgs
+
+    Start-Process wt -ArgumentList $finalArgs
+}
