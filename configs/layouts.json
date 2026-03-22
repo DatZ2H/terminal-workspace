@@ -1,0 +1,35 @@
+{
+  "defaultLayout": "dual-pane",
+  "layouts": {
+    "dual-pane": {
+      "description": "Two shells side by side",
+      "panes": [
+        { "profile": "PowerShell", "dir": ".", "split": "root" },
+        { "profile": "PowerShell", "dir": ".", "split": "vertical" }
+      ]
+    },
+    "triple-pane": {
+      "description": "3 panes: 2 top + 1 bottom",
+      "panes": [
+        { "profile": "PowerShell", "dir": ".", "split": "root" },
+        { "profile": "PowerShell", "dir": ".", "split": "vertical" },
+        { "profile": "PowerShell", "dir": ".", "split": "horizontal" }
+      ]
+    },
+    "dev-monitor": {
+      "description": "Shell + shell + monitoring pane",
+      "panes": [
+        { "profile": "PowerShell", "dir": ".", "split": "root" },
+        { "profile": "PowerShell", "dir": ".", "split": "vertical" },
+        { "profile": "PowerShell", "dir": ".", "split": "horizontal", "title": "Monitor" }
+      ]
+    },
+    "side-by-side": {
+      "description": "Two shells for compare/review",
+      "panes": [
+        { "profile": "PowerShell", "dir": ".", "split": "root" },
+        { "profile": "PowerShell", "dir": ".", "split": "vertical", "size": 0.5 }
+      ]
+    }
+  }
+}
