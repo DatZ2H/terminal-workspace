@@ -116,3 +116,26 @@ function Test-LayoutPanes {
         Warnings = @($warnings)
     }
 }
+
+# -- List all layouts --
+function Get-LayoutList {
+    [CmdletBinding()]
+    param()
+    if (-not $LayoutDB -or $LayoutDB.Count -eq 0) {
+        Write-Host "  No layouts available." -ForegroundColor Yellow
+        return
+    }
+    $sorted = $LayoutDB.Keys | Sort-Object
+    Write-Host ""
+    Write-Host "  PNX Layouts ($($sorted.Count) available)" -ForegroundColor White
+    $line = [string]::new([char]0x2500, 45)
+    Write-Host "  $line" -ForegroundColor DarkGray
+    foreach ($name in $sorted) {
+        $layout = $LayoutDB[$name]
+        $desc = if ($layout.description) { $layout.description } else { "" }
+        $paneCount = @($layout.panes).Count
+        Write-Host "  $name" -ForegroundColor Cyan -NoNewline
+        Write-Host "  ($paneCount panes) $desc" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+}

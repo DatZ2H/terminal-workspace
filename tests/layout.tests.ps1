@@ -151,3 +151,50 @@ Describe "Test-LayoutPanes" {
         $result.Warnings[0] | Should -BeLike "*reserved*"
     }
 }
+
+Describe "Get-LayoutList" {
+    BeforeAll {
+        $script:LayoutDB = @{
+            'dual-pane' = @{
+                description = 'Two shells side by side'
+                panes = @(
+                    @{ profile = "PowerShell"; dir = "."; split = "root" },
+                    @{ profile = "PowerShell"; dir = "."; split = "vertical" }
+                )
+            }
+            'triple-pane' = @{
+                description = '3 panes layout'
+                panes = @(
+                    @{ profile = "PowerShell"; dir = "."; split = "root" },
+                    @{ profile = "PowerShell"; dir = "."; split = "vertical" },
+                    @{ profile = "PowerShell"; dir = "."; split = "horizontal" }
+                )
+            }
+        }
+    }
+
+    It "Output contains layout names" {
+        $output = Get-LayoutList 6>&1 | Out-String
+        $output | Should -BeLike "*dual-pane*"
+        $output | Should -BeLike "*triple-pane*"
+    }
+
+    It "Output contains pane counts" {
+        $output = Get-LayoutList 6>&1 | Out-String
+        $output | Should -BeLike "*2 panes*"
+        $output | Should -BeLike "*3 panes*"
+    }
+
+    It "Output shows count of available layouts" {
+        $output = Get-LayoutList 6>&1 | Out-String
+        $output | Should -BeLike "*2 available*"
+    }
+
+    It "Shows message when LayoutDB is empty" {
+        $savedDB = $script:LayoutDB
+        $script:LayoutDB = @{}
+        $output = Get-LayoutList 6>&1 | Out-String
+        $output | Should -BeLike "*No layouts available*"
+        $script:LayoutDB = $savedDB
+    }
+}
