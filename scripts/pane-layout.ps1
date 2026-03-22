@@ -1,5 +1,16 @@
 # Pane layout management helpers
 # Dot-source this from profile or other scripts that need layout support.
+# Expects $LayoutDB, $_predefinedLayoutNames, $_customLayoutPath from profile.ps1.
+# Falls back to defaults if not set (allows standalone use).
+
+# Default paths — profile.ps1 sets these before dot-sourcing, but provide
+# fallbacks for standalone use. Uses script-scope to not shadow caller's variables.
+if (-not (Get-Variable _customLayoutPath -Scope 1 -ErrorAction SilentlyContinue)) {
+    $script:_customLayoutPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\layouts.json"
+}
+if (-not (Get-Variable _predefinedLayoutNames -Scope 1 -ErrorAction SilentlyContinue)) {
+    $script:_predefinedLayoutNames = @()
+}
 
 # -- Build wt.exe argument list from panes array --
 # Returns [string[]] array suitable for: & wt.exe @result
@@ -97,7 +108,8 @@ function Test-LayoutPanes {
         }
 
         # Rule 4: size must be in (0.0, 1.0) exclusive
-        if ($null -ne $pane.size -and $pane.ContainsKey('size')) {
+        $hasSize = if ($pane -is [hashtable]) { $pane.ContainsKey('size') } else { $pane.PSObject.Properties.Name -contains 'size' }
+        if ($null -ne $pane.size -and $hasSize) {
             $s = [double]$pane.size
             if ($s -le 0.0 -or $s -ge 1.0) {
                 $errors.Add("Layout '$LayoutName' pane[$i]: size must be between 0.0 and 1.0 exclusive, got $s")
@@ -105,7 +117,8 @@ function Test-LayoutPanes {
         }
 
         # Rule 5: parent field warning
-        if ($pane.ContainsKey('parent')) {
+        $hasParent = if ($pane -is [hashtable]) { $pane.ContainsKey('parent') } else { $pane.PSObject.Properties.Name -contains 'parent' }
+        if ($hasParent) {
             $warnings.Add("Layout '$LayoutName' pane[$i]: 'parent' field is reserved for future use, ignored in V1")
         }
     }
