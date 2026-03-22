@@ -279,3 +279,29 @@ function Remove-Layout {
 
     Write-Host "  Layout '$Name' removed." -ForegroundColor Green
 }
+
+# -- Get raw wt.exe command string for a layout --
+function Get-LayoutCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)][string]$Name,
+        [string]$Dir
+    )
+
+    if (-not $LayoutDB -or -not $LayoutDB.ContainsKey($Name)) {
+        Write-Warning "Layout '$Name' not found."
+        return
+    }
+
+    $resolvedDir = if ($Dir) { $Dir } else { (Get-Location).Path }
+    $panes = @($LayoutDB[$Name].panes)
+    $wtArgs = Build-WtCommand -Panes $panes -ResolvedDir $resolvedDir
+
+    $cmdParts = @('wt.exe')
+    foreach ($arg in $wtArgs) {
+        if ($arg -match '\s') { $cmdParts += "`"$arg`"" }
+        else { $cmdParts += $arg }
+    }
+    $cmdString = $cmdParts -join ' '
+    Write-Host $cmdString
+}

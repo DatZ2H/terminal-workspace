@@ -423,3 +423,47 @@ Describe "Remove-Layout" {
         $output | Should -BeLike "*not found*"
     }
 }
+
+Describe "Get-LayoutCommand" {
+    BeforeAll {
+        $script:LayoutDB = @{
+            'dual-pane' = @{
+                description = 'Two shells side by side'
+                panes = @(
+                    @{ profile = "PowerShell"; dir = "."; split = "root" },
+                    @{ profile = "PowerShell"; dir = "."; split = "vertical" }
+                )
+            }
+        }
+    }
+
+    It "Output contains wt.exe" {
+        $output = Get-LayoutCommand -Name 'dual-pane' -Dir "C:\Projects" 6>&1 | Out-String
+        $output | Should -BeLike "*wt.exe*"
+    }
+
+    It "Output contains split-pane" {
+        $output = Get-LayoutCommand -Name 'dual-pane' -Dir "C:\Projects" 6>&1 | Out-String
+        $output | Should -BeLike "*split-pane*"
+    }
+
+    It "Output contains profile name" {
+        $output = Get-LayoutCommand -Name 'dual-pane' -Dir "C:\Projects" 6>&1 | Out-String
+        $output | Should -BeLike "*PowerShell*"
+    }
+
+    It "Output contains semicolons for multi-pane" {
+        $output = Get-LayoutCommand -Name 'dual-pane' -Dir "C:\Projects" 6>&1 | Out-String
+        $output | Should -BeLike "*;*"
+    }
+
+    It "Warns for unknown layout" {
+        $output = Get-LayoutCommand -Name 'nonexistent' 3>&1 | Out-String
+        $output | Should -BeLike "*not found*"
+    }
+
+    It "Uses provided -Dir in output" {
+        $output = Get-LayoutCommand -Name 'dual-pane' -Dir "D:\MyDir" 6>&1 | Out-String
+        $output | Should -BeLike "*D:\MyDir*"
+    }
+}
