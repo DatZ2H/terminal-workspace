@@ -31,7 +31,7 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
           "command": "claude | pwsh | null (default shell)",
           "dir": ". (resolves to $PWD or -Dir param) | absolute path",
           "split": "root | vertical | horizontal",
-          "parent": 0  // optional: index of pane to split from (default: previous pane)
+          // "parent" field reserved for V2 — do not use in V1
         }
       ]
     }
@@ -43,7 +43,7 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
 - `command`: Command to run in the pane. `"claude"` for Claude Code, `"pwsh"` for PowerShell, `null` for default shell.
 - `dir`: Working directory. `"."` is resolved at runtime to `$PWD` or the `-Dir` parameter value.
 - `split`: `"root"` = first pane (tab), `"vertical"` = split right, `"horizontal"` = split down.
-- `parent` (optional): Zero-based index of the pane to split from. Defaults to the previous pane in the array. Enables complex layouts (e.g., L-shaped).
+- `parent` (optional): **V1 limitation — sequential split only.** Each pane splits from the previous pane (default behavior). The `parent` field is reserved for future use when WT pane indexing can be reliably mapped. In V1, omit this field.
 
 ### Predefined Layouts
 
@@ -51,8 +51,8 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
 |------|-------------|--------|
 | `dual-claude` | Two Claude Code instances side by side | `[claude \| claude]` |
 | `claude-terminal` | Claude Code + plain shell | `[claude \| pwsh]` |
-| `triple-claude` | 3 Claude: 2 top + 1 bottom | `[claude \| claude]` + `[claude below pane 0]` |
-| `claude-dev` | Claude + terminal + git log | `[claude \| pwsh]` + `[git log below pane 1]` |
+| `triple-claude` | 3 Claude: 2 top + 1 bottom | `[claude \| claude]` + `[claude below]` (sequential split) |
+| `claude-dev` | Claude + terminal + git log | `[claude \| pwsh]` + `[git log below]` (sequential split) |
 
 ## Commands & Functions
 
@@ -60,7 +60,7 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
 
 | Function | Description | Example |
 |----------|-------------|---------|
-| `Open-Layout <name> [-Dir <path>]` | Open a layout by name | `Open-Layout dual-claude` |
+| `Open-Layout <name> [-Dir <path>] [-NewWindow]` | Open a layout by name | `Open-Layout dual-claude` |
 | `Save-Layout <name> [-Panes <config>]` | Save a new layout to local JSON | `Save-Layout my-setup` |
 | `Remove-Layout <name>` | Delete a custom layout (predefined are protected) | `Remove-Layout old-setup` |
 | `Get-LayoutList` | Display all available layouts (predefined + custom) | `Get-LayoutList` |
@@ -73,7 +73,8 @@ Add pane layout management to the terminal workspace, optimized for Multi-Claude
 3. Resolve `dir`: `"."` → `-Dir` parameter or `$PWD`
 4. Call `Build-WtCommand` (helper in `common.ps1`) → build `wt.exe` argument string
 5. Detect context via `$env:WT_SESSION`:
-   - **Inside terminal** → prepend `-w 0` (target current window)
+   - **Inside terminal (default)** → prepend `-w 0 nt` (new tab in current window)
+   - **Inside terminal + `-NewWindow`** → omit `-w 0` (opens new window)
    - **Outside terminal** → omit `-w 0` (opens new window)
 6. Execute `wt.exe` with built arguments
 
@@ -85,27 +86,21 @@ Converts a panes array into `wt.exe` CLI syntax:
 Input:  panes = [
   { command: "claude", dir: "C:\proj", split: "root" },
   { command: "claude", dir: "C:\proj", split: "vertical" },
-  { command: null,     dir: "C:\proj", split: "horizontal", parent: 0 }
+  { command: null,     dir: "C:\proj", split: "horizontal" }
 ]
 
-Output: -d "C:\proj" -- claude ; split-pane -V -d "C:\proj" -- claude ; split-pane -H -s 0 -d "C:\proj"
+Output (inside terminal):
+  wt.exe -w 0 nt -d "C:\proj" -- claude ; split-pane -V -d "C:\proj" -- claude ; split-pane -H -d "C:\proj"
+
+Output (outside terminal):
+  wt.exe -d "C:\proj" -- claude ; split-pane -V -d "C:\proj" -- claude ; split-pane -H -d "C:\proj"
 ```
 
-Mapping: `vertical` → `-V`, `horizontal` → `-H`, `parent` → `-s <index>` (WT `--target-pane` flag).
+Mapping: `vertical` → `-V`, `horizontal` → `-H`. Each pane splits from the previously created pane (sequential).
 
 ### `Save-Layout` — Two Modes
 
-**Interactive mode** (no `-Panes` parameter):
-```
-Save-Layout my-workflow
-→ How many panes? 3
-→ Pane 1: command? claude  | dir? .  | split? root
-→ Pane 2: command? claude  | dir? .  | split? vertical
-→ Pane 3: command? (enter) | dir? .  | split? horizontal | parent? 0
-→ Saved "my-workflow" to local layouts.json
-```
-
-**One-liner mode** (with `-Panes`):
+**Parameter-only mode** (requires `-Panes`). No interactive prompts — keeps function pipeline-safe:
 ```powershell
 Save-Layout quick -Panes @(
   @{ command="claude"; dir="."; split="root" },
@@ -133,7 +128,7 @@ Tab completion for all layout functions, following existing `Register-ArgumentCo
 | File | Action | What Changes |
 |------|--------|-------------|
 | `configs/layouts.json` | **Create** | Predefined layouts data |
-| `configs/profile.ps1` | **Edit** | Add layout functions + `$LayoutDB` loading + argument completers |
+| `configs/profile.ps1` | **Edit** | Add layout functions (`Open-Layout`, `Save-Layout`, `Remove-Layout`, `Get-LayoutList`, `Get-LayoutCommand`), `$LayoutDB` loading, argument completers |
 | `scripts/common.ps1` | **Edit** | Add `Build-WtCommand` helper |
 | `tests/layout.tests.ps1` | **Create** | Pester tests for layout functions |
 | `bootstrap.ps1` | **No change** | Layouts load at profile time, no deploy step needed |
@@ -161,11 +156,29 @@ Layouts are pure data read at profile load time — same pattern as ThemeDB. No 
 - `Sync-Config pull`: Next profile reload picks up updated layouts
 - Custom layouts in `%LOCALAPPDATA%` stay local-only (same as custom themes)
 
+## `$LayoutDB` Variable
+
+- **Type:** `[hashtable]` — key = layout name, value = `@{ description = [string]; panes = [array] }`
+- **Scope:** `$Script:LayoutDB` (same scope as `$ThemeDB`)
+- **Merge strategy:** Overwrite by key — custom layout with same name as predefined replaces it entirely (same as ThemeDB custom theme override)
+- **Loaded at:** Profile startup, after ThemeDB/StyleDB
+
+## Validation Rules
+
+Validation runs in both `Save-Layout` (write time) and `Open-Layout` (runtime, in case JSON was hand-edited):
+
+1. `panes[0].split` must be `"root"` — error: `"Layout '<name>': first pane must have split 'root'"`
+2. `split` values must be one of: `root`, `vertical`, `horizontal`
+3. `command`: any non-empty string is valid (e.g., `"claude"`, `"pwsh"`, `"git log --oneline --graph"`). `$null` maps to default shell.
+4. `panes` array must have at least 1 entry
+5. `dir` must be a valid path or `"."` — warning if absolute path does not exist (non-blocking)
+6. `parent` field is ignored in V1 with a warning: `"'parent' field is reserved for future use, ignored in V1"`
+
 ## Constraints & Limitations
 
 1. **No auto-detect of current pane state**: Windows Terminal does not expose an API to query open panes. `Save-Layout` requires manual input.
 2. **No pane resize**: `wt.exe` supports `--size` at split time but not resizing existing panes. Layouts define split direction only.
-3. **`parent` index**: Uses zero-based index into the panes array. WT's `--target-pane` flag maps to the order panes were created, which matches our array order.
+3. **`parent` field (V1)**: Reserved for future use. WT's internal pane indexing uses a binary tree that shifts when panes are split, making arbitrary `--target-pane` targeting unreliable. V1 uses sequential splitting only (each pane splits from the previous one).
 4. **`$env:WT_SESSION`**: Only exists inside Windows Terminal sessions. Used to detect inside vs. outside context.
 
 ## Test Plan
@@ -174,5 +187,5 @@ Layouts are pure data read at profile load time — same pattern as ThemeDB. No 
 - `Open-Layout` with mocked `wt.exe`: verify correct arguments passed
 - `Save-Layout` / `Remove-Layout`: verify local JSON read/write
 - `Get-LayoutList`: verify merge of predefined + custom layouts
-- Layout validation: reject invalid split values, missing root pane, circular parent references
+- Layout validation: reject invalid split values, missing root pane, verify `parent` field is ignored with warning in V1
 - Argument completer: verify correct completions for each function
