@@ -467,3 +467,100 @@ Describe "Get-LayoutCommand" {
         $output | Should -BeLike "*D:\MyDir*"
     }
 }
+
+Describe "New-ClaudeProfile" {
+    BeforeAll {
+        $script:_tempWtDir3 = Join-Path ([System.IO.Path]::GetTempPath()) "pnx-test-claude-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        New-Item -ItemType Directory -Path $script:_tempWtDir3 -Force | Out-Null
+    }
+
+    AfterAll {
+        Remove-Item -Path $script:_tempWtDir3 -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Adds Claude profile to WT settings" {
+        $script:WtSettingsPath = Join-Path $script:_tempWtDir3 "settings-add.json"
+        @{
+            profiles = @{
+                list = @(
+                    @{ name = "PowerShell"; guid = "{test-1}" }
+                )
+            }
+        } | ConvertTo-Json -Depth 5 | Set-Content $script:WtSettingsPath -Encoding utf8NoBOM
+
+        New-ClaudeProfile 6>&1 | Out-Null
+
+        $json = Get-Content $script:WtSettingsPath -Raw | ConvertFrom-Json
+        $claude = $json.profiles.list | Where-Object { $_.name -eq 'Claude' }
+        $claude | Should -Not -BeNullOrEmpty
+        $claude.commandline | Should -Be 'claude'
+        $claude.guid | Should -Be '{c1a0de00-c0de-4c1a-bde0-000000000001}'
+    }
+
+    It "Skips if Claude profile already exists" {
+        $script:WtSettingsPath = Join-Path $script:_tempWtDir3 "settings-exists.json"
+        @{
+            profiles = @{
+                list = @(
+                    @{ name = "PowerShell"; guid = "{test-1}" },
+                    @{ name = "Claude"; guid = "{existing}"; commandline = "claude" }
+                )
+            }
+        } | ConvertTo-Json -Depth 5 | Set-Content $script:WtSettingsPath -Encoding utf8NoBOM
+
+        $output = New-ClaudeProfile 6>&1 | Out-String
+        $output | Should -BeLike "*already exists*"
+
+        # Should still have exactly one Claude profile
+        $json = Get-Content $script:WtSettingsPath -Raw | ConvertFrom-Json
+        $claudeCount = @($json.profiles.list | Where-Object { $_.name -eq 'Claude' }).Count
+        $claudeCount | Should -Be 1
+    }
+
+    It "Warns when WtSettingsPath is missing" {
+        $savedPath = $script:WtSettingsPath
+        $script:WtSettingsPath = $null
+        $output = New-ClaudeProfile 3>&1 | Out-String
+        $output | Should -BeLike "*not found*"
+        $script:WtSettingsPath = $savedPath
+    }
+}
+
+Describe "Show-Cheatsheet" {
+    It "Shows all categories by default" {
+        $output = Show-Cheatsheet 6>&1 | Out-String
+        $output | Should -BeLike "*THEME*"
+        $output | Should -BeLike "*PANE*"
+        $output | Should -BeLike "*CONFIG*"
+        $output | Should -BeLike "*KEYBOARD*"
+    }
+
+    It "Filters by theme category" {
+        $output = Show-Cheatsheet -Category theme 6>&1 | Out-String
+        $output | Should -BeLike "*THEME*"
+        $output | Should -BeLike "*Set-Theme*"
+        $output | Should -Not -BeLike "*PANE LAYOUTS*"
+        $output | Should -Not -BeLike "*CONFIG*"
+    }
+
+    It "Filters by pane category" {
+        $output = Show-Cheatsheet -Category pane 6>&1 | Out-String
+        $output | Should -BeLike "*PANE*"
+        $output | Should -BeLike "*Open-Layout*"
+        $output | Should -Not -BeLike "*THEME*"
+    }
+
+    It "Filters by config category" {
+        $output = Show-Cheatsheet -Category config 6>&1 | Out-String
+        $output | Should -BeLike "*CONFIG*"
+        $output | Should -BeLike "*Sync-Config*"
+        $output | Should -Not -BeLike "*THEME*"
+    }
+
+    It "Filters by keys category" {
+        $output = Show-Cheatsheet -Category keys 6>&1 | Out-String
+        $output | Should -BeLike "*KEYBOARD*"
+        $output | Should -BeLike "*Alt+Shift*"
+        $output | Should -Not -BeLike "*THEME*"
+    }
+}

@@ -305,3 +305,104 @@ function Get-LayoutCommand {
     $cmdString = $cmdParts -join ' '
     Write-Host $cmdString
 }
+
+# -- Create Claude WT profile --
+function New-ClaudeProfile {
+    [CmdletBinding()]
+    param()
+    if (-not $WtSettingsPath -or -not (Test-Path $WtSettingsPath)) {
+        Write-Warning "Windows Terminal settings not found."
+        return
+    }
+    try {
+        $wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Warning "WT settings.json is corrupt: $_"
+        return
+    }
+    $existing = $wtJson.profiles.list | Where-Object { $_.name -eq 'Claude' }
+    if ($existing) {
+        Write-Host "  Claude profile already exists in Windows Terminal." -ForegroundColor DarkGray
+        return
+    }
+    $claudeGuid = "{c1a0de00-c0de-4c1a-bde0-000000000001}"
+    $claudeProfile = [PSCustomObject]@{
+        name        = "Claude"
+        commandline = "claude"
+        guid        = $claudeGuid
+        hidden      = $false
+        icon        = "`u{2728}"
+    }
+    $wtJson.profiles.list = @($wtJson.profiles.list) + $claudeProfile
+    if (Get-Command Save-WtSettings -ErrorAction SilentlyContinue) {
+        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsPath)) {
+            Write-Warning "Failed to write WT settings (file locked?)."
+            return
+        }
+    } else {
+        $wtJson | ConvertTo-Json -Depth 20 | Set-Content $WtSettingsPath -Encoding utf8NoBOM
+    }
+    Write-Host "  Claude profile created in Windows Terminal." -ForegroundColor Green
+    Write-Host "  You can now use 'Claude' profile in custom layouts." -ForegroundColor DarkGray
+}
+
+# -- Show categorized command cheatsheet --
+function Show-Cheatsheet {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('theme', 'pane', 'config', 'keys', 'all')]
+        [string]$Category = 'all'
+    )
+    $line = [string]::new([char]0x2500, 45)
+    $sections = @{
+        theme = @(
+            "", "  THEME", "  $line",
+            "  Set-Theme <name> [style]     Switch theme (e.g., Set-Theme tokyo mac)",
+            "  Get-ThemeList                 Show all available themes",
+            "  Set-Style <style>             Switch style only (mac/win/linux)",
+            "  Select-ThemeInteractive       Arrow-key theme picker",
+            "  New-PnxTheme -Name <n> ...   Create custom theme",
+            "  Test-ThemeIntegrity           Validate theme components"
+        )
+        pane = @(
+            "", "  PANE LAYOUTS", "  $line",
+            "  Open-Layout <name>            Open a pane layout",
+            "  Open-Layout <name> -NewWindow Open in new window",
+            "  Get-LayoutList                Show all layouts",
+            "  Save-Layout <name> -Panes ..  Save custom layout",
+            "  Get-LayoutCommand <name>      Export wt.exe command",
+            "  New-ClaudeProfile             Create Claude WT profile"
+        )
+        config = @(
+            "", "  CONFIG", "  $line",
+            "  Sync-Config push|pull         Sync local <-> repo",
+            "  Update-Workspace              Pull + redeploy + reload",
+            "  Get-Status                    Health check",
+            "  Update-Tools                  Update all packages",
+            "  Deploy-ClaudeConfig           Deploy Claude configs"
+        )
+        keys = @(
+            "", "  KEYBOARD SHORTCUTS (Windows Terminal)", "  $line",
+            "  Alt+Shift+D                   Auto split pane",
+            "  Alt+Shift++ / Alt+Shift+-     Split vertical / horizontal",
+            "  Alt+Arrow                     Move focus between panes",
+            "  Alt+Shift+Arrow               Resize pane",
+            "  Ctrl+Shift+W                  Close pane",
+            "  Ctrl+Shift+T                  New tab",
+            "  Ctrl+Tab / Ctrl+Shift+Tab     Next / previous tab"
+        )
+    }
+    Write-Host ""
+    Write-Host "  PNX Terminal Cheatsheet" -ForegroundColor White
+    $toShow = if ($Category -eq 'all') { @('theme', 'pane', 'config', 'keys') } else { @($Category) }
+    foreach ($cat in $toShow) {
+        foreach ($s in $sections[$cat]) {
+            if ($s -match '^\s{2}[A-Z]') { Write-Host $s -ForegroundColor Cyan }
+            elseif ($s -match '^\s{2}[─]') { Write-Host $s -ForegroundColor DarkGray }
+            else { Write-Host $s }
+        }
+    }
+    Write-Host ""
+    Write-Host "  Type Show-Cheatsheet <category> to filter." -ForegroundColor DarkGray
+    Write-Host ""
+}
