@@ -91,6 +91,58 @@ $_defaultTheme = if ($_pnxManifest.defaultTheme) { $_pnxManifest.defaultTheme } 
 $_defaultStyle = if ($_pnxManifest.defaultStyle) { $_pnxManifest.defaultStyle } else { 'mac' }
 Remove-Variable _pnxManifest, _manifestPath -ErrorAction SilentlyContinue
 
+# ===== Load Pane Layout Management =====
+$_paneLayoutScript = if ($env:PNX_TERMINAL_REPO) { "$env:PNX_TERMINAL_REPO\scripts\pane-layout.ps1" } else { $null }
+if ($_paneLayoutScript -and (Test-Path $_paneLayoutScript)) {
+    . $_paneLayoutScript
+}
+Remove-Variable _paneLayoutScript -ErrorAction SilentlyContinue
+
+# Build LayoutDB from manifest
+$LayoutDB = @{}
+$_predefinedLayoutNames = @()
+if ($env:PNX_TERMINAL_REPO) {
+    $_layoutManifest = "$env:PNX_TERMINAL_REPO\configs\layouts.json"
+    if (Test-Path $_layoutManifest) {
+        try {
+            $_layoutData = Get-Content $_layoutManifest -Raw | ConvertFrom-Json
+            foreach ($p in $_layoutData.layouts.PSObject.Properties) {
+                $LayoutDB[$p.Name] = @{
+                    description = $p.Value.description
+                    panes       = @($p.Value.panes)
+                }
+            }
+            $_predefinedLayoutNames = @($LayoutDB.Keys)
+        } catch {
+            $_healthIssues += "layouts.json corrupt — pane layouts not loaded."
+        }
+    }
+    Remove-Variable _layoutManifest, _layoutData -ErrorAction SilentlyContinue
+}
+
+# Merge custom layouts (predefined wins — custom only adds new names)
+$_customLayoutPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\layouts.json"
+if (Test-Path $_customLayoutPath) {
+    try {
+        $custom = Get-Content $_customLayoutPath -Raw | ConvertFrom-Json
+        foreach ($prop in $custom.PSObject.Properties) {
+            if (-not $LayoutDB.ContainsKey($prop.Name)) {
+                $LayoutDB[$prop.Name] = @{
+                    description = $prop.Value.description
+                    panes       = @($prop.Value.panes)
+                }
+            }
+        }
+    } catch {
+        $_healthIssues += "Custom layouts.json corrupt — custom layouts not loaded."
+    }
+}
+
+# Check wt.exe availability
+if (-not (Get-Command wt -ErrorAction SilentlyContinue)) {
+    $_healthIssues += "wt.exe not found — pane layout commands unavailable. Install: winget install Microsoft.WindowsTerminal"
+}
+
 # ===== Detect Current Theme & Style from WT Settings =====
 $Global:PnxCurrentTheme = $_defaultTheme
 $Global:PnxCurrentStyle = $_defaultStyle
@@ -278,6 +330,14 @@ if ($_healthIssues.Count -gt 0) {
 }
 Remove-Variable _healthIssues -ErrorAction SilentlyContinue
 
+# ===== Welcome line (interactive sessions only) =====
+if ([Environment]::UserInteractive -and -not $env:PNX_NO_WELCOME) {
+    $_themeName = if ($Global:PnxCurrentTheme) { $Global:PnxCurrentTheme } else { "default" }
+    $_styleName = if ($Global:PnxCurrentStyle) { "($Global:PnxCurrentStyle)" } else { "" }
+    Write-Host "  PNX Terminal | $_themeName $_styleName | Show-Cheatsheet for help" -ForegroundColor DarkGray
+    Remove-Variable _themeName, _styleName -ErrorAction SilentlyContinue
+}
+
 # ===== Default Parameters =====
 $PSDefaultParameterValues['Install-Module:Scope'] = 'CurrentUser'
 
@@ -316,6 +376,33 @@ Register-ArgumentCompleter -CommandName Remove-PnxTheme -ParameterName Name -Scr
                 [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Custom theme: $_")
             }
         } catch {}
+    }
+}
+
+# Tab completion for layout functions
+Register-ArgumentCompleter -CommandName Open-Layout -ParameterName Name -ScriptBlock {
+    param($cmd, $param, $word)
+    $LayoutDB.Keys | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
+        $desc = if ($LayoutDB[$_].description) { $LayoutDB[$_].description } else { $_ }
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $desc)
+    }
+}.GetNewClosure()
+Register-ArgumentCompleter -CommandName Remove-Layout -ParameterName Name -ScriptBlock {
+    param($cmd, $param, $word)
+    $_customLayoutPath = Join-Path $env:LOCALAPPDATA "pnx-terminal\layouts.json"
+    if (Test-Path $_customLayoutPath) {
+        try {
+            $reg = Get-Content $_customLayoutPath -Raw | ConvertFrom-Json
+            $reg.PSObject.Properties.Name | Sort-Object | Where-Object { $_ -like "$word*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Custom layout: $_")
+            }
+        } catch {}
+    }
+}
+Register-ArgumentCompleter -CommandName Show-Cheatsheet -ParameterName Category -ScriptBlock {
+    param($cmd, $param, $word)
+    @('theme', 'pane', 'config', 'keys', 'all') | Where-Object { $_ -like "$word*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }
 
