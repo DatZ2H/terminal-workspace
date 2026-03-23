@@ -173,7 +173,7 @@
       "cursorShape": "bar",
       "font": {
         "face": "CaskaydiaCove NF",
-        "size": 12,
+        "size": 10,
         "weight": "normal"
       },
       "historySize": 50000,
