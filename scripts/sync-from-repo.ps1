@@ -41,10 +41,10 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
         Get-ChildItem (Split-Path $WtSettingsLocal -Parent) -Filter "settings.json.backup-*" |
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $MaxBackups | Remove-Item -Force
     }
-    # Atomic deploy: read repo JSON, inject markers, write via Save-WtSettings
+    # Atomic deploy: read repo JSON, fix font + bootstrap state, write via Save-WtSettings
     try {
         $wtJson = Get-Content $repoWt -Raw | ConvertFrom-Json
-        Initialize-WtPnxMarkers -WtJson $wtJson | Out-Null
+        Initialize-WtDefaults -WtJson $wtJson | Out-Null
         if (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal) {
             Write-Host "  WT Settings      OK" -ForegroundColor Green
         } else {

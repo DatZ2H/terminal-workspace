@@ -114,90 +114,80 @@ Describe "Get-PnxCachedInit / Save-PnxCachedInit / Clear-PnxCache" {
     }
 }
 
-Describe "Initialize-WtPnxMarkers" {
-    It "Reads defaults from manifest file" {
-        $manifestPath = Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
-        Test-Path $manifestPath | Should -BeTrue
-        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-        # The defaults loaded by common.ps1 should match the manifest
-        $json = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{}
-            }
-        }
-        Initialize-WtPnxMarkers -WtJson $json | Out-Null
-        $json.profiles.defaults.pnxTheme | Should -Be $manifest.defaultTheme
-        $json.profiles.defaults.pnxStyle | Should -Be $manifest.defaultStyle
+Describe "Get-PnxState / Save-PnxState" {
+    BeforeEach {
+        $testStateFile = Join-Path $TestDrive "pnxstate-$(New-Guid).json"
+        $script:OrigStateFile = $global:PnxStateFile
+        $global:PnxStateFile = $testStateFile
+    }
+    AfterEach {
+        $global:PnxStateFile = $script:OrigStateFile
     }
 
-    It "Adds pnxTheme when missing" {
-        $json = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{}
-            }
-        }
-        $result = Initialize-WtPnxMarkers -WtJson $json
-        $result | Should -BeTrue
-        $json.profiles.defaults.pnxTheme | Should -Be 'pro'
+    It "Returns null when state file does not exist" {
+        Get-PnxState | Should -BeNullOrEmpty
     }
 
-    It "Adds pnxStyle when missing" {
-        $json = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{}
-            }
-        }
-        Initialize-WtPnxMarkers -WtJson $json | Out-Null
-        $json.profiles.defaults.pnxStyle | Should -Be 'mac'
+    It "Round-trips theme, style, split" {
+        Save-PnxState -Theme 'tokyo' -Style 'linux' -Split $true
+        $state = Get-PnxState
+        $state.theme | Should -Be 'tokyo'
+        $state.style | Should -Be 'linux'
+        $state.split  | Should -BeTrue
     }
 
-    It "Does not overwrite existing markers" {
-        $json = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{
-                    pnxTheme = 'tokyo'
-                    pnxStyle = 'linux'
-                    pnxSplit = $true
-                }
-            }
-        }
-        $result = Initialize-WtPnxMarkers -WtJson $json
-        $result | Should -BeFalse
-        $json.profiles.defaults.pnxTheme | Should -Be 'tokyo'
-        $json.profiles.defaults.pnxStyle | Should -Be 'linux'
-        $json.profiles.defaults.pnxSplit | Should -Be $true
+    It "Overwrites previous state" {
+        Save-PnxState -Theme 'pro' -Style 'mac' -Split $false
+        Save-PnxState -Theme 'dracula' -Style 'win' -Split $true
+        $state = Get-PnxState
+        $state.theme | Should -Be 'dracula'
+        $state.style | Should -Be 'win'
+    }
+
+    It "Returns null for corrupt state file" {
+        '{ invalid json' | Set-Content $testStateFile
+        Get-PnxState | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Initialize-WtDefaults" {
+    BeforeEach {
+        $testStateFile = Join-Path $TestDrive "wtdefaults-$(New-Guid).json"
+        $script:OrigStateFile = $global:PnxStateFile
+        $global:PnxStateFile = $testStateFile
+    }
+    AfterEach {
+        $global:PnxStateFile = $script:OrigStateFile
     }
 
     It "Creates profiles.defaults when missing" {
         $json = [PSCustomObject]@{
             profiles = [PSCustomObject]@{}
         }
-        Initialize-WtPnxMarkers -WtJson $json | Out-Null
-        $json.profiles.defaults | Should -Not -BeNullOrEmpty
-        $json.profiles.defaults.pnxTheme | Should -Be 'pro'
+        Initialize-WtDefaults -WtJson $json | Out-Null
+        $json.profiles.PSObject.Properties['defaults'] | Should -Not -BeNull
     }
 
-    It "Returns `$true when changes made, `$false otherwise" {
-        $json1 = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{ defaults = [PSCustomObject]@{} }
-        }
-        Initialize-WtPnxMarkers -WtJson $json1 | Should -BeTrue
-
-        $json2 = [PSCustomObject]@{
-            profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{ pnxTheme = 'pro'; pnxStyle = 'mac'; pnxSplit = $false }
-            }
-        }
-        Initialize-WtPnxMarkers -WtJson $json2 | Should -BeFalse
-    }
-
-    It "Accepts custom default theme and style" {
+    It "Bootstraps state file when missing" {
         $json = [PSCustomObject]@{
             profiles = [PSCustomObject]@{ defaults = [PSCustomObject]@{} }
         }
-        Initialize-WtPnxMarkers -WtJson $json -DefaultTheme 'tokyo' -DefaultStyle 'linux' | Out-Null
-        $json.profiles.defaults.pnxTheme | Should -Be 'tokyo'
-        $json.profiles.defaults.pnxStyle | Should -Be 'linux'
+        Initialize-WtDefaults -WtJson $json -DefaultTheme 'tokyo' -DefaultStyle 'linux' | Out-Null
+        Test-Path $testStateFile | Should -BeTrue
+        $state = Get-PnxState
+        $state.theme | Should -Be 'tokyo'
+        $state.style | Should -Be 'linux'
+        $state.split  | Should -BeFalse
+    }
+
+    It "Does not overwrite existing state file" {
+        Save-PnxState -Theme 'dracula' -Style 'win' -Split $true
+        $json = [PSCustomObject]@{
+            profiles = [PSCustomObject]@{ defaults = [PSCustomObject]@{} }
+        }
+        Initialize-WtDefaults -WtJson $json -DefaultTheme 'pro' -DefaultStyle 'mac' | Out-Null
+        $state = Get-PnxState
+        $state.theme | Should -Be 'dracula'
     }
 }
 

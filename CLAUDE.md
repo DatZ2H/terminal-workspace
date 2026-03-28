@@ -44,7 +44,7 @@ Engine (logic)                  Content (data)
 
 1. `bootstrap.ps1` → sets `PNX_TERMINAL_REPO` env var, deploys themes + profile + WT settings
 2. Profile load → reads `configs/themes.json` via `$env:PNX_TERMINAL_REPO` → builds ThemeDB/StyleDB
-3. `Set-Theme <name>` → updates OMP prompt + WT settings.json (atomic write) + pnx markers
+3. `Set-Theme <name>` → updates OMP prompt + WT settings.json (atomic write) + pnx state file
 4. `Sync-Config push` → copies local changes back to repo (OMP files, WT settings, Claude configs with secrets stripped)
 5. `Sync-Config pull` → deploys from repo to local, deploys Claude configs (additive merge), clears init cache, reloads profile
 
@@ -60,7 +60,7 @@ Custom themes (created via `New-PnxTheme`) are stored in `%LOCALAPPDATA%\pnx-ter
 ## Critical Invariants
 
 - **Naming convention:** OMP files must be `pnx-*.omp.json`
-- **pnx markers:** `pnxTheme`/`pnxStyle` in WT `profiles.defaults` track active theme/style
+- **pnx state:** `%LOCALAPPDATA%\pnx-terminal\state.json` stores active theme/style/split (WT-immune)
 - **Atomic writes:** WT settings written via `Save-WtSettings` (backup → temp → rename)
 - **Cache invalidation:** `Clear-PnxCache` after any config change (OMP/zoxide init cache)
 - **Type coercion:** StyleDB values from JSON need explicit `[int]`/`[bool]` cast in PowerShell

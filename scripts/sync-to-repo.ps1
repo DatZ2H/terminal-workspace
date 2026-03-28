@@ -43,14 +43,6 @@ if ($WtSettingsLocal) {
                 $p.PSObject.Properties.Remove('environment')
             }
         }
-        # Strip pnx markers from defaults (local state, not portable)
-        if ($wtJson.profiles.defaults) {
-            foreach ($marker in @('pnxTheme', 'pnxStyle', 'pnxSplit')) {
-                if ($wtJson.profiles.defaults.PSObject.Properties[$marker]) {
-                    $wtJson.profiles.defaults.PSObject.Properties.Remove($marker)
-                }
-            }
-        }
         $wtJson | ConvertTo-Json -Depth 20 | Set-Content "$RepoRoot\configs\terminal-settings.json" -Encoding utf8NoBOM
         Write-Host "  WT Settings      OK" -ForegroundColor Green
     } catch {

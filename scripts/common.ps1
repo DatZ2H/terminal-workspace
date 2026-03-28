@@ -157,7 +157,37 @@ function Clear-PnxCache {
     }
 }
 
-# -- Manifest Defaults (lazy loaded, used by Initialize-WtPnxMarkers) --
+# -- Pnx State (persists theme/style/split outside WT settings.json) --
+# WT overwrites settings.json and strips unknown properties on every launch,
+# so pnx state is stored in a separate file that only our code touches.
+$global:PnxStateFile = Join-Path $env:LOCALAPPDATA "pnx-terminal\state.json"
+
+function Get-PnxState {
+    [CmdletBinding()]
+    param()
+    if (-not (Test-Path $PnxStateFile)) { return $null }
+    try {
+        $raw = Get-Content $PnxStateFile -Raw -ErrorAction Stop
+        return ($raw | ConvertFrom-Json)
+    } catch { return $null }
+}
+
+function Save-PnxState {
+    [CmdletBinding()]
+    param(
+        [string]$Theme,
+        [string]$Style,
+        [bool]$Split = $false
+    )
+    $dir = Split-Path $PnxStateFile -Parent
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    @{ theme = $Theme; style = $Style; split = $Split } |
+        ConvertTo-Json | Set-Content $PnxStateFile -Encoding utf8NoBOM
+}
+
+# -- Manifest Defaults (used by Initialize-WtDefaults for state file bootstrap) --
 $script:_pnxDefaults = @{ theme = 'pro'; style = 'mac' }  # fallback
 $_manifestPath = if ($PSScriptRoot) {
     Join-Path (Split-Path $PSScriptRoot -Parent) "configs\themes.json"
@@ -172,10 +202,10 @@ if ($_manifestPath -and (Test-Path $_manifestPath)) {
 }
 Remove-Variable _manifestPath -ErrorAction SilentlyContinue
 
-# -- Deduplicated pnx marker injection (used by bootstrap + sync-from-repo) --
-# Ensures pnxTheme/pnxStyle markers exist in WT settings and fixes font face.
-# Returns $true if any changes were made (caller should write JSON back to disk).
-function Initialize-WtPnxMarkers {
+# -- WT defaults setup (used by bootstrap + sync-from-repo) --
+# Ensures profiles.defaults exists, fixes font face, bootstraps state file.
+# Returns $true if WT JSON was modified (caller should write JSON back to disk).
+function Initialize-WtDefaults {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object]$WtJson,
@@ -185,20 +215,9 @@ function Initialize-WtPnxMarkers {
     $changed = $false
     if (-not $WtJson.profiles.defaults) {
         $WtJson.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([PSCustomObject]@{}) -Force
+        $changed = $true
     }
     $d = $WtJson.profiles.defaults
-    if (-not $d.PSObject.Properties['pnxTheme']) {
-        $d | Add-Member -NotePropertyName pnxTheme -NotePropertyValue $DefaultTheme
-        $changed = $true
-    }
-    if (-not $d.PSObject.Properties['pnxStyle']) {
-        $d | Add-Member -NotePropertyName pnxStyle -NotePropertyValue $DefaultStyle
-        $changed = $true
-    }
-    if (-not $d.PSObject.Properties['pnxSplit']) {
-        $d | Add-Member -NotePropertyName pnxSplit -NotePropertyValue $false
-        $changed = $true
-    }
     # Fix font face if needed
     if ($d.font -and $d.font.face) {
         $fi = Get-NerdFontInfo
@@ -206,6 +225,10 @@ function Initialize-WtPnxMarkers {
             $d.font.face = $fi.FontFace
             $changed = $true
         }
+    }
+    # Bootstrap state file if missing (first run / migration)
+    if (-not (Test-Path $PnxStateFile)) {
+        Save-PnxState -Theme $DefaultTheme -Style $DefaultStyle -Split $false
     }
     return $changed
 }

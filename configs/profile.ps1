@@ -155,38 +155,45 @@ if (-not (Get-Command wt -ErrorAction SilentlyContinue)) {
     $_healthIssues += "wt.exe not found — pane layout commands unavailable. Install: winget install Microsoft.WindowsTerminal"
 }
 
-# ===== Detect Current Theme & Style from WT Settings =====
+# ===== Detect Current Theme & Style =====
+# Primary: state file (%LOCALAPPDATA%\pnx-terminal\state.json) — immune to WT overwrites
+# Fallback: heuristic match from WT settings (for first run after migration)
 $Global:PnxCurrentTheme = $_defaultTheme
 $Global:PnxCurrentStyle = $_defaultStyle
 $Global:PnxSplitMode    = $false
 
-if ($WtSettingsPath) {
-    try {
-        $_wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
-        $_defaults = $_wtJson.profiles.defaults
-        if ($_defaults) {
-            # Prefer stored pnx markers (written by Set-Theme), fallback to heuristic match
-            # Cross-validate: if marker exists but conflicts with colorScheme, trust colorScheme
-            if ($_defaults.pnxTheme -and $ThemeDB.ContainsKey($_defaults.pnxTheme)) {
-                $markerScheme = $ThemeDB[$_defaults.pnxTheme].scheme
-                if ($_defaults.colorScheme -and $markerScheme -ne $_defaults.colorScheme) {
-                    # Marker stale — colorScheme was changed outside Set-Theme, fallback to heuristic
-                    $Global:PnxCurrentTheme = $_defaultTheme
-                    foreach ($k in $ThemeDB.Keys) {
-                        if ($ThemeDB[$k].scheme -eq $_defaults.colorScheme) { $Global:PnxCurrentTheme = $k; break }
-                    }
-                } else {
-                    $Global:PnxCurrentTheme = $_defaults.pnxTheme
-                }
-            } else {
+$_pnxState = Get-PnxState
+if ($_pnxState -and $_pnxState.theme -and $ThemeDB.ContainsKey($_pnxState.theme)) {
+    # Cross-validate: if colorScheme in WT doesn't match state, user changed it via GUI
+    $_stateValid = $true
+    if ($WtSettingsPath) {
+        try {
+            $_wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+            $_wtScheme = $_wtJson.profiles.defaults.colorScheme
+            if ($_wtScheme -and $ThemeDB[$_pnxState.theme].scheme -ne $_wtScheme) {
+                $_stateValid = $false  # state stale — WT colorScheme changed outside Set-Theme
+            }
+        } catch {}
+    }
+    if ($_stateValid) {
+        $Global:PnxCurrentTheme = $_pnxState.theme
+        if ($_pnxState.style -and $StyleDB.ContainsKey($_pnxState.style)) {
+            $Global:PnxCurrentStyle = $_pnxState.style
+        }
+        if ($_pnxState.split -eq $true) { $Global:PnxSplitMode = $true }
+    }
+}
+
+# Fallback: heuristic from WT settings (no state file, or state stale)
+if ($Global:PnxCurrentTheme -eq $_defaultTheme -and -not $_pnxState) {
+    if ($WtSettingsPath) {
+        try {
+            if (-not $_wtJson) { $_wtJson = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json }
+            $_defaults = $_wtJson.profiles.defaults
+            if ($_defaults) {
                 foreach ($k in $ThemeDB.Keys) {
                     if ($ThemeDB[$k].scheme -eq $_defaults.colorScheme) { $Global:PnxCurrentTheme = $k; break }
                 }
-            }
-            if ($_defaults.pnxStyle -and $StyleDB.ContainsKey($_defaults.pnxStyle)) {
-                $Global:PnxCurrentStyle = $_defaults.pnxStyle
-            } else {
-                # Multi-field heuristic: match on opacity + useAcrylic + padding (needs 2+ matches)
                 $bestMatch = $null; $bestScore = 0
                 foreach ($k in $StyleDB.Keys) {
                     $s = $StyleDB[$k]; $score = 0
@@ -196,15 +203,16 @@ if ($WtSettingsPath) {
                     if ($score -gt $bestScore) { $bestScore = $score; $bestMatch = $k }
                 }
                 if ($bestMatch -and $bestScore -ge 2) { $Global:PnxCurrentStyle = $bestMatch }
+                # Bootstrap state file from heuristic result
+                Save-PnxState -Theme $Global:PnxCurrentTheme -Style $Global:PnxCurrentStyle -Split $false
             }
-            # Detect split mode marker
-            if ($_defaults.pnxSplit -eq $true) { $Global:PnxSplitMode = $true }
+            Remove-Variable _defaults -ErrorAction SilentlyContinue
+        } catch {
+            $_healthIssues += "WT settings.json unreadable — theme/style detection skipped"
         }
-        Remove-Variable _defaults -ErrorAction SilentlyContinue
-    } catch {
-        $_healthIssues += "WT settings.json unreadable — theme/style detection skipped"
     }
 }
+Remove-Variable _pnxState, _stateValid, _wtScheme, _wtJson -ErrorAction SilentlyContinue
 
 # ===== Oh My Posh (init with detected theme — cached) =====
 $_ompConfig = $ThemeDB[$Global:PnxCurrentTheme].omp
@@ -874,17 +882,8 @@ function Set-Theme {
         }
     }
 
-    # Store pnx markers for reliable detection on next profile load
-    foreach ($prop in @('pnxTheme', 'pnxStyle', 'pnxSplit')) {
-        $val = switch ($prop) {
-            'pnxTheme' { $Theme }
-            'pnxStyle' { $Style }
-            'pnxSplit'  { $_splitActive }
-        }
-        if (-not $d.PSObject.Properties[$prop]) {
-            $d | Add-Member -NotePropertyName $prop -NotePropertyValue $val
-        } else { $d.$prop = $val }
-    }
+    # Persist pnx state to file (immune to WT settings overwrite)
+    Save-PnxState -Theme $Theme -Style $Style -Split $_splitActive
 
     $json.theme = $t.wtTheme
 
