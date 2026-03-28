@@ -180,8 +180,6 @@
       "intenseTextStyle": "bright",
       "opacity": 85,
       "padding": "16, 12, 16, 12",
-      "pnxStyle": "mac",
-      "pnxTheme": "pro",
       "scrollbarState": "visible",
       "unfocusedAppearance": {
         "opacity": 70

@@ -72,14 +72,9 @@ function Repair-WtFontFace {
     if (-not $d -or -not $d.font -or -not $d.font.face) { return $false }
     if ($d.font.face -eq $fi.FontFace) { return $false }
     $d.font.face = $fi.FontFace
-    $tempPath = "$WtPath.pnx-tmp"
-    $json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
-    try {
-        [System.IO.File]::Move($tempPath, $WtPath, $true)
-    } catch {
-        # Fallback: direct write if atomic move fails
-        $json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+    if (-not (Save-WtSettings -Json $json -WtPath $WtPath)) {
+        Write-Warning "Repair-WtFontFace: atomic write failed (WT may be locking file)."
+        return $false
     }
     return $true
 }
