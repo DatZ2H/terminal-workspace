@@ -45,14 +45,15 @@ if ($WtSettingsLocal -and (Test-Path $repoWt)) {
     try {
         $wtJson = Get-Content $repoWt -Raw | ConvertFrom-Json
         Initialize-WtPnxMarkers -WtJson $wtJson | Out-Null
-        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal)) {
-            Write-Host "  WT Settings      WARNING: atomic write failed, falling back to Copy-Item" -ForegroundColor Yellow
-            Copy-Item $repoWt $WtSettingsLocal -Force
+        if (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal) {
+            Write-Host "  WT Settings      OK" -ForegroundColor Green
+        } else {
+            Write-Host "  WT Settings      FAILED: file locked by Windows Terminal" -ForegroundColor Red
+            Write-Host "                   Close WT and run: Sync-Config pull" -ForegroundColor DarkGray
+            Write-Host "                   Recovery file: $WtSettingsLocal.pnx-tmp" -ForegroundColor DarkGray
         }
-        Write-Host "  WT Settings      OK" -ForegroundColor Green
     } catch {
-        Write-Host "  WT Settings      WARNING: JSON processing failed: $_" -ForegroundColor Yellow
-        Copy-Item $repoWt $WtSettingsLocal -Force
+        Write-Host "  WT Settings      FAILED: $_" -ForegroundColor Red
     }
 } elseif (-not $WtSettingsLocal) {
     Write-Host "  WT Settings      NOT FOUND (neither Store nor non-Store)" -ForegroundColor Red

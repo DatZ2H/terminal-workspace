@@ -154,15 +154,14 @@ if ($WtSettingsLocal) {
     try {
         $wtJson = Get-Content "$RepoRoot\configs\terminal-settings.json" -Raw | ConvertFrom-Json
         Initialize-WtPnxMarkers -WtJson $wtJson | Out-Null
-        if (-not (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal)) {
-            Write-Skip "Atomic write failed, falling back to Copy-Item"
-            Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
+        if (Save-WtSettings -Json $wtJson -WtPath $WtSettingsLocal) {
+            Write-Ok "WT settings deployed"
+        } else {
+            Write-Warning "WT settings: atomic write failed (file locked). Close WT and re-run bootstrap."
         }
     } catch {
-        Write-Skip "JSON processing failed: $_ — falling back to Copy-Item"
-        Copy-Item "$RepoRoot\configs\terminal-settings.json" $WtSettingsLocal -Force
+        Write-Warning "WT settings: JSON processing failed: $_"
     }
-    Write-Ok "WT settings deployed"
 } else {
     Write-Skip "Windows Terminal not found (install from Microsoft Store or winget)"
 }

@@ -97,24 +97,23 @@ function Save-WtSettings {
     )
     # Backup
     Copy-Item $WtPath "$WtPath.pnx-backup" -Force -ErrorAction SilentlyContinue
-    # Write to temp file
+    # Write to temp file first (safe — WT doesn't watch this path)
     $tempPath = "$WtPath.pnx-tmp"
     $Json | ConvertTo-Json -Depth 20 | Set-Content $tempPath -Encoding utf8NoBOM
     # Atomic replace via .NET (true atomic on NTFS — no delete+rename gap)
-    for ($retry = 0; $retry -lt 3; $retry++) {
+    # Retry with exponential backoff: 200, 400, 800, 1600, 3200ms (total ~6s)
+    for ($retry = 0; $retry -lt 5; $retry++) {
         try {
             [System.IO.File]::Move($tempPath, $WtPath, $true)
             return $true
-        } catch { Start-Sleep -Milliseconds 200 }
+        } catch { Start-Sleep -Milliseconds (200 * [math]::Pow(2, $retry)) }
     }
-    # Last resort: direct write (non-atomic but better than silent failure)
-    try {
-        $Json | ConvertTo-Json -Depth 20 | Set-Content $WtPath -Encoding utf8NoBOM
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
-        return $true
-    } catch {
-        return $false
-    }
+    # All atomic retries failed — do NOT fall back to non-atomic Set-Content
+    # because WT file watcher may read a partial write and show a parse error.
+    # Instead, clean up temp file and report failure so caller can decide.
+    Write-Warning "Save-WtSettings: atomic write failed after 5 retries (WT may be locking the file)."
+    # Temp file is still valid JSON — leave it for manual recovery
+    return $false
 }
 
 # -- Init Cache Infrastructure --
