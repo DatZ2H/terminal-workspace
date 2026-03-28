@@ -1,4 +1,5 @@
 #Requires -Modules Pester
+#Requires -Version 7.0
 # Tests for scripts/pane-layout.ps1
 
 BeforeAll {
@@ -590,7 +591,7 @@ Describe "LayoutDB Merge — Predefined Wins" {
 Describe "Corrupted layouts.json" {
     It "Gracefully handles malformed JSON" {
         $tempFile = Join-Path $env:TEMP "pnx-corrupt-test-$(Get-Random).json"
-        "{ invalid json" | Set-Content $tempFile
+        '{ invalid json' | Set-Content $tempFile
         $result = $null
         try {
             $result = Get-Content $tempFile -Raw | ConvertFrom-Json

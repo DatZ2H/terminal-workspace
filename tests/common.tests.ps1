@@ -1,4 +1,5 @@
 #Requires -Modules Pester
+#Requires -Version 7.0
 # Tests for scripts/common.ps1
 
 BeforeAll {
@@ -156,6 +157,7 @@ Describe "Initialize-WtPnxMarkers" {
                 defaults = [PSCustomObject]@{
                     pnxTheme = 'tokyo'
                     pnxStyle = 'linux'
+                    pnxSplit = $true
                 }
             }
         }
@@ -163,6 +165,7 @@ Describe "Initialize-WtPnxMarkers" {
         $result | Should -BeFalse
         $json.profiles.defaults.pnxTheme | Should -Be 'tokyo'
         $json.profiles.defaults.pnxStyle | Should -Be 'linux'
+        $json.profiles.defaults.pnxSplit | Should -Be $true
     }
 
     It "Creates profiles.defaults when missing" {
@@ -182,7 +185,7 @@ Describe "Initialize-WtPnxMarkers" {
 
         $json2 = [PSCustomObject]@{
             profiles = [PSCustomObject]@{
-                defaults = [PSCustomObject]@{ pnxTheme = 'pro'; pnxStyle = 'mac' }
+                defaults = [PSCustomObject]@{ pnxTheme = 'pro'; pnxStyle = 'mac'; pnxSplit = $false }
             }
         }
         Initialize-WtPnxMarkers -WtJson $json2 | Should -BeFalse

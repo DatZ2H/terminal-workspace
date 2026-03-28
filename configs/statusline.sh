@@ -71,7 +71,7 @@ fi
 build_bar() {
     local pct=$1
     local width=15
-    local filled=$(printf "%.0f" "$(echo "$pct * $width / 100" | bc -l 2>/dev/null || echo 0)")
+    local filled=$(printf "%.0f" "$(awk "BEGIN{print $pct * $width / 100}" 2>/dev/null || echo 0)")
     [ "$filled" -gt "$width" ] 2>/dev/null && filled=$width
     [ "$filled" -lt 0 ] 2>/dev/null && filled=0
     local empty=$((width - filled))
@@ -117,9 +117,9 @@ format_duration() {
 format_tokens() {
     local t=$1
     if [ "$t" -ge 1000000 ] 2>/dev/null; then
-        printf "%.1fM" "$(echo "$t / 1000000" | bc -l 2>/dev/null)"
+        printf "%.1fM" "$(awk "BEGIN{print $t / 1000000}" 2>/dev/null)"
     elif [ "$t" -ge 1000 ] 2>/dev/null; then
-        printf "%.1fk" "$(echo "$t / 1000" | bc -l 2>/dev/null)"
+        printf "%.1fk" "$(awk "BEGIN{print $t / 1000}" 2>/dev/null)"
     else
         printf "%d" "$t"
     fi
@@ -137,6 +137,12 @@ shorten_path() {
     fi
 }
 
+# ── Detect terminal width for responsive layout ──
+
+COLS=$(tput cols 2>/dev/null || echo 120)
+NARROW=false
+[ "$COLS" -lt 90 ] 2>/dev/null && NARROW=true
+
 # ── Line 1: Model + Style + Git branch + Context bar ──
 
 printf "%b%b%s%b" "$BOLD" "$CYAN" "$MODEL" "$RST"
@@ -146,13 +152,22 @@ if [ -n "$OUT_STYLE" ]; then
 fi
 
 if [ -n "$GIT_BRANCH" ]; then
+    # Truncate long branch names when narrow
+    if [ "$NARROW" = true ] && [ "${#GIT_BRANCH}" -gt 15 ]; then
+        GIT_BRANCH="${GIT_BRANCH:0:14}…"
+    fi
     printf "  %b%s%b" "$BLUE" "$GIT_BRANCH" "$RST"
 fi
 
 if [ -n "$CTX_PCT" ]; then
-    printf "  %bctx%b " "$DIM" "$RST"
-    build_bar "$CTX_PCT"
-    printf " %b%.1f%%%b" "$(pct_color "$CTX_PCT")" "$CTX_PCT" "$RST"
+    if [ "$NARROW" = true ]; then
+        # Compact: just percentage, no bar
+        printf "  %bctx%b %b%.0f%%%b" "$DIM" "$RST" "$(pct_color "$CTX_PCT")" "$CTX_PCT" "$RST"
+    else
+        printf "  %bctx%b " "$DIM" "$RST"
+        build_bar "$CTX_PCT"
+        printf " %b%.1f%%%b" "$(pct_color "$CTX_PCT")" "$CTX_PCT" "$RST"
+    fi
 else
     printf "  %bctx n/a%b" "$DIM" "$RST"
 fi
@@ -174,10 +189,11 @@ if [ -n "$IN_TOKENS" ] && [ -n "$OUT_TOKENS" ]; then
     printf "  %bin:%b%s %bout:%b%s" "$DIM" "$RST" "$(format_tokens "$IN_TOKENS")" "$DIM" "$RST" "$(format_tokens "$OUT_TOKENS")"
 fi
 
-if [ -n "$CACHE_READ" ] && [ -n "$CACHE_CREATE" ]; then
+# Hide cache ratio when narrow
+if [ "$NARROW" != true ] && [ -n "$CACHE_READ" ] && [ -n "$CACHE_CREATE" ]; then
     CACHE_TOTAL=$((CACHE_READ + CACHE_CREATE))
     if [ "$CACHE_TOTAL" -gt 0 ] 2>/dev/null; then
-        CACHE_RATIO=$(echo "$CACHE_READ * 100 / $CACHE_TOTAL" | bc -l 2>/dev/null)
+        CACHE_RATIO=$(awk "BEGIN{print $CACHE_READ * 100 / $CACHE_TOTAL}" 2>/dev/null)
         CACHE_INT=${CACHE_RATIO%.*}
         if [ "$CACHE_INT" -ge 70 ] 2>/dev/null; then
             C_COLOR="$GREEN"

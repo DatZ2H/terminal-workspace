@@ -1,4 +1,5 @@
 #Requires -Modules Pester
+#Requires -Version 7.0
 # Tests for configs/profile.ps1 logic
 # These tests dot-source profile.ps1 in a controlled environment.
 

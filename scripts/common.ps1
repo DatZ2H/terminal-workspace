@@ -201,6 +201,10 @@ function Initialize-WtPnxMarkers {
         $d | Add-Member -NotePropertyName pnxStyle -NotePropertyValue $DefaultStyle
         $changed = $true
     }
+    if (-not $d.PSObject.Properties['pnxSplit']) {
+        $d | Add-Member -NotePropertyName pnxSplit -NotePropertyValue $false
+        $changed = $true
+    }
     # Fix font face if needed
     if ($d.font -and $d.font.face) {
         $fi = Get-NerdFontInfo
@@ -319,7 +323,7 @@ function Remove-ClaudeSecrets {
         }
     }
     # Scan all string values for secret patterns + keywords (outside mcpServers too)
-    function Redact-DeepStrings([object]$Obj, [string]$Path) {
+    function _RedactStrings([object]$Obj, [string]$Path) {
         if ($Obj -is [PSCustomObject]) {
             foreach ($p in $Obj.PSObject.Properties) {
                 if ($p.Value -is [string] -and $p.Value.Length -gt 0) {
@@ -337,7 +341,7 @@ function Remove-ClaudeSecrets {
                     }
                     if ($isSecret) { $Obj.($p.Name) = "<REDACTED>" }
                 } elseif ($p.Value -is [PSCustomObject]) {
-                    Redact-DeepStrings $p.Value "$Path.$($p.Name)"
+                    _RedactStrings $p.Value "$Path.$($p.Name)"
                 } elseif ($p.Value -is [array]) {
                     for ($i = 0; $i -lt $p.Value.Count; $i++) {
                         $item = $p.Value[$i]
@@ -346,14 +350,14 @@ function Remove-ClaudeSecrets {
                                 if ($item -match $pattern) { $p.Value[$i] = "<REDACTED>"; break }
                             }
                         } elseif ($item -is [PSCustomObject]) {
-                            Redact-DeepStrings $item "$Path.$($p.Name)[$i]"
+                            _RedactStrings $item "$Path.$($p.Name)[$i]"
                         }
                     }
                 }
             }
         }
     }
-    Redact-DeepStrings $clone ""
+    _RedactStrings $clone ""
     return $clone
 }
 
@@ -363,7 +367,7 @@ function Test-ClaudeSecrets {
     [CmdletBinding()]
     param([Parameter(Mandatory)][object]$Json)
     $found = [System.Collections.Generic.List[string]]::new()
-    function Scan-Object([object]$Obj, [string]$Path) {
+    function _ScanObject([object]$Obj, [string]$Path) {
         if ($Obj -is [PSCustomObject]) {
             foreach ($p in $Obj.PSObject.Properties) {
                 $currentPath = if ($Path) { "$Path.$($p.Name)" } else { $p.Name }
@@ -384,7 +388,7 @@ function Test-ClaudeSecrets {
                         }
                     }
                 } elseif ($p.Value -is [PSCustomObject]) {
-                    Scan-Object $p.Value $currentPath
+                    _ScanObject $p.Value $currentPath
                 } elseif ($p.Value -is [array]) {
                     for ($i = 0; $i -lt $p.Value.Count; $i++) {
                         $item = $p.Value[$i]
@@ -393,13 +397,13 @@ function Test-ClaudeSecrets {
                                 if ($item -match $pattern) { $found.Add("$currentPath[$i]"); break }
                             }
                         } elseif ($item -is [PSCustomObject]) {
-                            Scan-Object $item "$currentPath[$i]"
+                            _ScanObject $item "$currentPath[$i]"
                         }
                     }
                 }
             }
         }
     }
-    Scan-Object $Json ""
+    _ScanObject $Json ""
     return @($found)
 }

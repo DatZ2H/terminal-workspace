@@ -1,4 +1,5 @@
 #Requires -Modules Pester
+#Requires -Version 7.0
 # Tests for Claude Code deploy, merge, and secret stripping
 
 BeforeAll {

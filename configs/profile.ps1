@@ -89,6 +89,18 @@ if ($StyleDB.Count -eq 0) {
 # Read defaults from manifest (single source of truth)
 $_defaultTheme = if ($_pnxManifest.defaultTheme) { $_pnxManifest.defaultTheme } else { 'pro' }
 $_defaultStyle = if ($_pnxManifest.defaultStyle) { $_pnxManifest.defaultStyle } else { 'mac' }
+
+# Load split overrides (modifier on top of OS style)
+$Global:PnxSplitOverrides = @{}
+if ($_pnxManifest.splitOverrides) {
+    foreach ($p in $_pnxManifest.splitOverrides.PSObject.Properties) {
+        $Global:PnxSplitOverrides[$p.Name] = switch ($p.Name) {
+            { $_ -in @('opacity', 'unfocusedOpacity') } { [int]$p.Value }
+            { $_ -in @('useAcrylic', 'useMica') }       { [bool]$p.Value }
+            default                                       { $p.Value }
+        }
+    }
+}
 Remove-Variable _pnxManifest, _manifestPath -ErrorAction SilentlyContinue
 
 # ===== Load Pane Layout Management =====
@@ -146,6 +158,7 @@ if (-not (Get-Command wt -ErrorAction SilentlyContinue)) {
 # ===== Detect Current Theme & Style from WT Settings =====
 $Global:PnxCurrentTheme = $_defaultTheme
 $Global:PnxCurrentStyle = $_defaultStyle
+$Global:PnxSplitMode    = $false
 
 if ($WtSettingsPath) {
     try {
@@ -184,6 +197,8 @@ if ($WtSettingsPath) {
                 }
                 if ($bestMatch -and $bestScore -ge 2) { $Global:PnxCurrentStyle = $bestMatch }
             }
+            # Detect split mode marker
+            if ($_defaults.pnxSplit -eq $true) { $Global:PnxSplitMode = $true }
         }
         Remove-Variable _defaults -ErrorAction SilentlyContinue
     } catch {
@@ -334,8 +349,9 @@ Remove-Variable _healthIssues -ErrorAction SilentlyContinue
 if ([Environment]::UserInteractive -and -not $env:PNX_NO_WELCOME) {
     $_themeName = if ($Global:PnxCurrentTheme) { $Global:PnxCurrentTheme } else { "default" }
     $_styleName = if ($Global:PnxCurrentStyle) { "($Global:PnxCurrentStyle)" } else { "" }
-    Write-Host "  PNX Terminal | $_themeName $_styleName | Show-Cheatsheet for help" -ForegroundColor DarkGray
-    Remove-Variable _themeName, _styleName -ErrorAction SilentlyContinue
+    $_splitLabel = if ($Global:PnxSplitMode) { " + split" } else { "" }
+    Write-Host "  PNX Terminal | $_themeName $_styleName$_splitLabel | Show-Cheatsheet for help" -ForegroundColor DarkGray
+    Remove-Variable _themeName, _styleName, _splitLabel -ErrorAction SilentlyContinue
 }
 
 # ===== Default Parameters =====
@@ -761,7 +777,9 @@ function Set-Theme {
     [CmdletBinding()]
     param(
         [Parameter(Position=0)][string]$Theme,
-        [Parameter(Position=1)][string]$Style
+        [Parameter(Position=1)][string]$Style,
+        [switch]$Split,
+        [switch]$NoSplit
     )
 
     if (-not $Theme) {
@@ -784,7 +802,7 @@ function Set-Theme {
 
     if (-not $StyleDB.ContainsKey($Style)) {
         Write-Host "  Unknown style '$Style'" -ForegroundColor Red
-        Write-Host "  Available: mac, win, linux" -ForegroundColor DarkGray
+        Write-Host "  Available: $($StyleDB.Keys | Sort-Object | Join-String -Separator ', ')" -ForegroundColor DarkGray
         return
     }
 
@@ -842,9 +860,27 @@ function Set-Theme {
         $d.unfocusedAppearance.opacity = $s.unfocusedOpacity
     }
 
+    # Resolve split mode: explicit switch > current state
+    $_splitActive = if ($Split) { $true } elseif ($NoSplit) { $false } else { $Global:PnxSplitMode }
+
+    # Apply split overrides on top of OS style
+    if ($_splitActive -and $Global:PnxSplitOverrides.Count -gt 0) {
+        foreach ($k in $Global:PnxSplitOverrides.Keys) {
+            switch ($k) {
+                'padding'           { $d.padding = $Global:PnxSplitOverrides[$k] }
+                'unfocusedOpacity'  { $d.unfocusedAppearance.opacity = [int]$Global:PnxSplitOverrides[$k] }
+                'opacity'           { $d.opacity = [int]$Global:PnxSplitOverrides[$k] }
+            }
+        }
+    }
+
     # Store pnx markers for reliable detection on next profile load
-    foreach ($prop in @('pnxTheme', 'pnxStyle')) {
-        $val = if ($prop -eq 'pnxTheme') { $Theme } else { $Style }
+    foreach ($prop in @('pnxTheme', 'pnxStyle', 'pnxSplit')) {
+        $val = switch ($prop) {
+            'pnxTheme' { $Theme }
+            'pnxStyle' { $Style }
+            'pnxSplit'  { $_splitActive }
+        }
         if (-not $d.PSObject.Properties[$prop]) {
             $d | Add-Member -NotePropertyName $prop -NotePropertyValue $val
         } else { $d.$prop = $val }
@@ -876,19 +912,28 @@ function Set-Theme {
 
     $Global:PnxCurrentTheme = $Theme
     $Global:PnxCurrentStyle = $Style
+    $Global:PnxSplitMode    = $_splitActive
 
-    Write-Host "  $Theme + $Style" -ForegroundColor Green
+    $_splitLabel = if ($_splitActive) { " + split" } else { "" }
+    Write-Host "  $Theme + $Style$_splitLabel" -ForegroundColor Green
 }
 
 function Set-Style {
     [CmdletBinding()]
-    param([Parameter(Position=0)][string]$Style)
-    if (-not $Style) {
-        Write-Host "  Current: $Global:PnxCurrentStyle" -ForegroundColor Cyan
-        Write-Host "  Available: mac, win, linux" -ForegroundColor DarkGray
+    param(
+        [Parameter(Position=0)][string]$Style,
+        [switch]$Split,
+        [switch]$NoSplit
+    )
+    if (-not $Style -and -not $Split -and -not $NoSplit) {
+        $_splitLabel = if ($Global:PnxSplitMode) { " + split" } else { "" }
+        Write-Host "  Current: $Global:PnxCurrentStyle$_splitLabel" -ForegroundColor Cyan
+        Write-Host "  Available: $($StyleDB.Keys | Sort-Object | Join-String -Separator ', ')" -ForegroundColor DarkGray
+        Write-Host "  Modifiers: -Split / -NoSplit" -ForegroundColor DarkGray
         return
     }
-    Set-Theme -Theme $Global:PnxCurrentTheme -Style $Style
+    $_style = if ($Style) { $Style } else { $Global:PnxCurrentStyle }
+    Set-Theme -Theme $Global:PnxCurrentTheme -Style $_style -Split:$Split -NoSplit:$NoSplit
 }
 
 # ===== Maintenance Functions (delegate to standalone scripts) =====

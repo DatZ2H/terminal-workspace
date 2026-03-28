@@ -174,7 +174,13 @@ function Open-Layout {
     }
 
     $layout = $LayoutDB[$Name]
-    $panes = @($layout.panes)
+    # Shallow clone each pane to avoid mutating LayoutDB when fixing invalid profiles
+    $panes = @($layout.panes | ForEach-Object {
+        $clone = @{}
+        if ($_ -is [hashtable]) { $_.GetEnumerator() | ForEach-Object { $clone[$_.Key] = $_.Value } }
+        else { $_.PSObject.Properties | ForEach-Object { $clone[$_.Name] = $_.Value } }
+        $clone
+    })
 
     $validation = Test-LayoutPanes -Panes $panes -LayoutName $Name
     foreach ($w in $validation.Warnings) { Write-Warning $w }
@@ -312,7 +318,7 @@ function Get-LayoutCommand {
 
     $cmdParts = @('wt.exe')
     foreach ($arg in $wtArgs) {
-        if ($arg -match '\s') { $cmdParts += "`"$arg`"" }
+        if ($arg -match '[\s"]') { $cmdParts += "`"$($arg -replace '"','\"')`"" }
         else { $cmdParts += $arg }
     }
     $cmdString = $cmdParts -join ' '
@@ -373,6 +379,8 @@ function Show-Cheatsheet {
             "  Set-Theme <name> [style]     Switch theme (e.g., Set-Theme tokyo mac)",
             "  Get-ThemeList                 Show all available themes",
             "  Set-Style <style>             Switch style only (mac/win/linux)",
+            "  Set-Style -Split              Enable split-screen mode",
+            "  Set-Style -NoSplit            Disable split-screen mode",
             "  Select-ThemeInteractive       Arrow-key theme picker",
             "  New-PnxTheme -Name <n> ...   Create custom theme",
             "  Test-ThemeIntegrity           Validate theme components"
