@@ -251,28 +251,38 @@ if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
 Remove-Variable _ompConfig, _fallback, _ompExe, _ompVer, _ompCfgTicks, _ompExtra, _ompCached, _ompInit -ErrorAction SilentlyContinue
 
 # ===== Terminal Icons (lazy-load on idle for fast startup) =====
-if (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue) {
-    if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
-        # Proxy: auto-import on first ls/Get-ChildItem call (before OnIdle fires)
-        # NOTE: Must remove proxy BEFORE Import-Module — Terminal-Icons internally
-        # calls Get-ChildItem (to scan icon dirs), which would re-enter this proxy
-        # and hit the module nesting limit (10 levels).
-        function Global:Get-ChildItem {
-            Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
-            Import-Module Terminal-Icons -ErrorAction SilentlyContinue
-            Microsoft.PowerShell.Management\Get-ChildItem @args
-        }
-        # OnIdle: import + clean up proxy if still present
-        Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
-            Import-Module Terminal-Icons -ErrorAction SilentlyContinue
-            Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
-        } | Out-Null
-    } else {
-        # PS < 7.3: import directly (no OnIdle event available)
+# NOTE: Don't gate on Get-Module -ListAvailable — module files live on OneDrive
+# (ReparsePoint) and may be unavailable right after wake from sleep. Always set up
+# the proxy/OnIdle so import succeeds once OneDrive reconnects.
+if ($PSVersionTable.PSVersion -ge [Version]"7.3") {
+    # Proxy: auto-import on first ls/Get-ChildItem call (before OnIdle fires)
+    # NOTE: Must remove proxy BEFORE Import-Module — Terminal-Icons internally
+    # calls Get-ChildItem (to scan icon dirs), which would re-enter this proxy
+    # and hit the module nesting limit (10 levels).
+    function Global:Get-ChildItem {
+        Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
         Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+        Microsoft.PowerShell.Management\Get-ChildItem @args
     }
+    # OnIdle: retry import until module loads (handles OneDrive reconnect after wake)
+    # No MaxTriggerCount — keeps retrying. Once loaded, check is a cheap no-op.
+    Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
+        if (-not (Get-Module Terminal-Icons)) {
+            Remove-Item Function:\Get-ChildItem -ErrorAction SilentlyContinue
+            Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+        }
+    } | Out-Null
 } else {
-    $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
+    # PS < 7.3: import directly (no OnIdle event available)
+    Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+}
+# Health check: only flag if module truly missing (not just OneDrive slow to connect)
+if (-not (Get-Module Terminal-Icons -ListAvailable -ErrorAction SilentlyContinue)) {
+    $_tiModPath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Modules\Terminal-Icons'
+    if (-not (Test-Path $_tiModPath)) {
+        $_healthIssues += "Terminal-Icons missing (ls has no icons) -- run:  Install-Module Terminal-Icons -Force"
+    }
+    Remove-Variable _tiModPath -ErrorAction SilentlyContinue
 }
 
 # ===== Nerd Font check (verify CaskaydiaCove is available) =====
