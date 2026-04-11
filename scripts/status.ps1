@@ -98,7 +98,7 @@ $claudeCliJs = $null
 $npmRoot = try { (npm root -g 2>$null) } catch { $null }
 if ($npmRoot) { $claudeCliJs = Join-Path $npmRoot "@anthropic-ai\claude-code\cli.js" }
 if ($claudeCliJs -and (Test-Path $claudeCliJs)) {
-    $patchMarker = Select-String -Path $claudeCliJs -Pattern 'VIETNAMESE_IME_FIX' -Quiet -ErrorAction SilentlyContinue
+    $patchMarker = Select-String -Path $claudeCliJs -Pattern 'Vietnamese IME fix' -Quiet -ErrorAction SilentlyContinue
     $fixStatus = if ($patchMarker) { "patched" } else { "unpatched" }
     $fixColor = if ($patchMarker) { "Green" } else { "Yellow" }
 } else {
