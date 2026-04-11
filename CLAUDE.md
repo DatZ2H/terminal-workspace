@@ -98,6 +98,8 @@ uses backspace+replace technique that Claude Code doesn't handle correctly.
 - **Restore:** `Fix-ClaudeVN -Restore` — rollback to backup
 - **Bootstrap:** Runs automatically during `bootstrap.ps1` Phase 2
 - **After update:** Run `Fix-ClaudeVN` after each Claude Code npm update
+- **Auto re-patch:** `update-tools.ps1` tự gọi `fix-claude-vn.ps1` khi Claude Code version thay đổi
+- **Patch marker:** `'/* Vietnamese IME fix */'` — dùng string này khi cần detect patch status
 
 ## Claude Code Config Management
 
@@ -108,6 +110,16 @@ Two-pillar system: Terminal (themes/styles/WT) + Claude Code (statusline/setting
 - **Secret stripping:** `Sync-Config push` strips secrets (github_pat_, ghp_, sk-, tokens) before writing template to repo
 - **Bootstrap Phase 2:** Gated on Claude Code being installed — Steps 7-8 (detect + deploy)
 - **Template:** `configs/claude-settings.template.json` uses `bash ~/.claude/statusline.sh` (portable path)
+
+## Update Tools Architecture
+
+`scripts/update-tools.ps1` has 3 update channels:
+- **Winget:** PS7, WT, OMP, Git, Node.js, Python — pre-check via `winget upgrade` (no args, one call)
+- **Scoop:** zoxide, ripgrep — pre-check via `scoop status`
+- **npm:** Claude Code — pre-check via `npm view` vs `claude --version`
+
+Pre-check phase runs first, shows available updates, exits early if nothing to update.
+Winget skips packages already up-to-date (saves ~30s). WT has specific error message for file lock.
 
 ## Common Claude Tasks
 
