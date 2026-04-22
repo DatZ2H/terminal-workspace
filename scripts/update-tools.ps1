@@ -5,6 +5,12 @@ param([switch]$Force)
 
 . "$PSScriptRoot\common.ps1"
 
+function Get-ClaudeVersion {
+    $raw = try { claude --version 2>$null } catch { $null }
+    if ($raw -and ($raw -match '(\d+\.\d+\.\d+)')) { return $Matches[1] }
+    return $null
+}
+
 $results = [System.Collections.Generic.List[hashtable]]::new()
 
 $packages = @(
@@ -70,17 +76,17 @@ if (Get-Command scoop -ErrorAction SilentlyContinue) {
 }
 
 # Claude Code
-$claudeCurrentVer = try { (claude --version 2>$null) -replace 'claude ','' } catch { $null }
-$claudeLatestVer = try { (npm view @anthropic-ai/claude-code version 2>$null) } catch { $null }
-$claudeNeedsUpdate = $claudeCurrentVer -and $claudeLatestVer -and ($claudeCurrentVer.Trim() -ne $claudeLatestVer.Trim())
+$claudeCurrentVer = Get-ClaudeVersion
+$claudeLatestVer = try { ((npm view @anthropic-ai/claude-code version 2>$null) | Out-String).Trim() } catch { $null }
+$claudeNeedsUpdate = $claudeCurrentVer -and $claudeLatestVer -and ($claudeCurrentVer -ne $claudeLatestVer)
 
 if ($claudeCurrentVer) {
     Write-Host ("    {0,-22}" -f "Claude Code") -NoNewline
     if ($claudeNeedsUpdate) {
-        Write-Host "$($claudeCurrentVer.Trim()) -> $($claudeLatestVer.Trim())" -ForegroundColor Yellow
+        Write-Host "$claudeCurrentVer -> $claudeLatestVer" -ForegroundColor Yellow
         $anyUpdates = $true
     } else {
-        Write-Host "up to date ($($claudeCurrentVer.Trim()))" -ForegroundColor Green
+        Write-Host "up to date ($claudeCurrentVer)" -ForegroundColor Green
     }
 }
 
@@ -166,13 +172,13 @@ if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
 # ── Claude Code ─────────────────────────────────────────────────────
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     Write-Host "`n  Updating Claude Code..." -ForegroundColor Cyan
-    $preVer = try { (claude --version 2>$null) -replace 'claude ','' } catch { $null }
-    npm install -g @anthropic-ai/claude-code@latest 2>$null
+    $preVer = Get-ClaudeVersion
+    claude update 2>&1 | Out-Host
     if ($LASTEXITCODE -eq 0) {
-        $postVer = try { (claude --version 2>$null) -replace 'claude ','' } catch { $null }
-        if ($preVer -and $postVer -and ($preVer.Trim() -ne $postVer.Trim())) {
-            Write-Host "    updated: $($preVer.Trim()) -> $($postVer.Trim())" -ForegroundColor Green
-            # Re-apply Vietnamese IME fix (npm overwrites cli.js)
+        $postVer = Get-ClaudeVersion
+        if ($preVer -and $postVer -and ($preVer -ne $postVer)) {
+            Write-Host "    updated: $preVer -> $postVer" -ForegroundColor Green
+            # Re-apply Vietnamese IME fix (updater overwrites cli.js; no-op on 2.1.x+)
             Write-Host "    Re-applying Vietnamese IME fix..." -ForegroundColor Cyan
             $fixScript = Join-Path $PSScriptRoot "fix-claude-vn.ps1"
             if (Test-Path $fixScript) {
@@ -181,7 +187,7 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
             Write-Host "    Restart any running Claude Code sessions." -ForegroundColor DarkGray
             $results.Add(@{ Name = 'Claude Code'; Status = 'updated' })
         } else {
-            Write-Host "    already up-to-date ($($postVer.Trim()))" -ForegroundColor DarkGray
+            Write-Host "    already up-to-date ($postVer)" -ForegroundColor DarkGray
             $results.Add(@{ Name = 'Claude Code'; Status = 'up-to-date' })
         }
     } else {

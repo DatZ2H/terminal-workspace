@@ -90,16 +90,23 @@ Invoke-Pester ./tests/common.tests.ps1 -Output Detailed
 
 ## Claude Code Vietnamese IME Fix
 
-Fixes Vietnamese input in Claude Code CLI. Vietnamese IME (OpenKey, EVKey, Unikey)
-uses backspace+replace technique that Claude Code doesn't handle correctly.
+Vietnamese IME (OpenKey, EVKey, Unikey) uses backspace+replace technique. Claude Code
+2.0.x had a buggy handler for this. **Starting from 2.1.x Anthropic refactored the input
+parser** — DEL (0x7F) now routes through tokenizer → `ZI1` key decoder → backspace key
+event → `m.backspace()`. Vietnamese IME works natively; no patch required.
+
+`fix-claude-vn.ps1` keeps the legacy patch logic for 2.0.x installs. On 2.1.x+ it
+detects the absent legacy pattern and exits cleanly with no changes.
 
 - **Script:** `scripts/fix-claude-vn.ps1` — PowerShell port of [claude-code-vietnamese-fix](https://github.com/manhit96/claude-code-vietnamese-fix)
-- **Command:** `Fix-ClaudeVN` — auto-detect and patch `cli.js`
-- **Restore:** `Fix-ClaudeVN -Restore` — rollback to backup
+- **Command:** `Fix-ClaudeVN` — auto-detect and patch (legacy pattern) or no-op (2.1.x+)
+- **Restore:** `Fix-ClaudeVN -Restore` — rollback to backup (only exists if legacy patch was applied)
 - **Bootstrap:** Runs automatically during `bootstrap.ps1` Phase 2
-- **After update:** Run `Fix-ClaudeVN` after each Claude Code npm update
-- **Auto re-patch:** `update-tools.ps1` tự gọi `fix-claude-vn.ps1` khi Claude Code version thay đổi
-- **Patch marker:** `'/* Vietnamese IME fix */'` — dùng string này khi cần detect patch status
+- **Auto re-run:** `update-tools.ps1` tự gọi `fix-claude-vn.ps1` khi Claude Code version thay đổi (graceful no-op trên 2.1.x+)
+- **Patch marker:** `'/* Vietnamese IME fix */'` — dùng khi cần detect legacy patch status
+
+> [!WARNING]
+> **Do not** patch the 2.1.x DEL ground branch (`A.push({type:"text", value:"<DEL>"})`). The raw DEL byte inside the `value` string is essential — ZI1 maps DEL → backspace via literal-byte comparison (`q==="<DEL>"`). Any rewrite that replaces the raw byte with a `"\x7f"` escape literal breaks the routing. Leave 2.1.x cli.js untouched.
 
 ## Claude Code Config Management
 
@@ -116,10 +123,13 @@ Two-pillar system: Terminal (themes/styles/WT) + Claude Code (statusline/setting
 `scripts/update-tools.ps1` has 3 update channels:
 - **Winget:** PS7, WT, OMP, Git, Node.js, Python — pre-check via `winget upgrade` (no args, one call)
 - **Scoop:** zoxide, ripgrep — pre-check via `scoop status`
-- **npm:** Claude Code — pre-check via `npm view` vs `claude --version`
+- **Claude Code:** pre-check via `npm view @anthropic-ai/claude-code version` vs `claude --version`; update via `claude update` (native self-updater — handles both npm-global and native installer transparently)
 
 Pre-check phase runs first, shows available updates, exits early if nothing to update.
 Winget skips packages already up-to-date (saves ~30s). WT has specific error message for file lock.
+
+> [!NOTE]
+> Workspace previously used `npm install -g @anthropic-ai/claude-code@latest` for Claude Code updates. After `claude migrate-installer` (or a fresh 2.x install) the active binary lives under `~/.claude/local/` — npm global writes don't replace it. `claude update` is the portable command for both install types.
 
 ## Common Claude Tasks
 

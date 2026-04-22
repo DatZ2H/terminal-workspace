@@ -58,17 +58,15 @@ function Find-ClaudeCliJs {
 function Find-BugBlock {
     <#
     .SYNOPSIS
-    Find the if-block containing the Vietnamese IME bug pattern.
-    Returns: start index, end index, block text
+    Find the if-block containing the Vietnamese IME bug pattern (Claude Code <= 2.0.x).
+    Returns: start index, end index, block text. Returns $null if pattern absent.
     #>
     param([string]$Content)
 
     $pattern = ".includes(`"$DelChar`")"
     $idx = $Content.IndexOf($pattern)
 
-    if ($idx -eq -1) {
-        throw "Khong tim thay bug pattern .includes(""\x7f"").`nClaude Code co the da duoc Anthropic fix."
-    }
+    if ($idx -eq -1) { return $null }
 
     # Find the containing if(
     $searchStart = [Math]::Max(0, $idx - 150)
@@ -206,21 +204,27 @@ function Invoke-Patch {
         return $true
     }
 
-    # Backup
+    # Only the legacy pattern (Claude Code <= 2.0.x: `.includes("\x7f")`) needs patching.
+    # Starting from 2.1.x Anthropic refactored cli.js into a state-machine parser that
+    # already routes DEL (0x7F) through the key decoder as a backspace event — Vietnamese
+    # IME works natively. If the legacy pattern is absent, we exit cleanly without touching
+    # cli.js.
+    $block = Find-BugBlock -Content $content
+    if (-not $block) {
+        Write-Host "  Khong tim thay bug pattern cu (legacy)." -ForegroundColor DarkGray
+        Write-Host "  Claude Code 2.1.x tu xu ly Vietnamese IME — khong can patch." -ForegroundColor Green
+        return $true
+    }
+
+    # Backup (only when we're actually going to patch)
     $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $backupPath = "$FilePath.backup-$timestamp"
     Copy-Item $FilePath $backupPath -Force
     Write-Host "  Backup: $backupPath" -ForegroundColor DarkGray
 
     try {
-        # Find bug block
-        $block = Find-BugBlock -Content $content
-
-        # Extract variables
         $vars = Get-BugVariables -Block $block.Text
-        Write-Host "  Vars: input=$($vars.inputVar), state=$($vars.stateVar), cur=$($vars.curStateVar)" -ForegroundColor DarkGray
-
-        # Generate fix and replace
+        Write-Host "  Legacy patch: input=$($vars.inputVar), state=$($vars.stateVar), cur=$($vars.curStateVar)" -ForegroundColor DarkGray
         $fixCode = New-FixCode -V $vars -Marker $PatchMarker
         $patched = $content.Substring(0, $block.Start) + $fixCode + $content.Substring($block.End)
 

@@ -1064,12 +1064,11 @@ function Update-Workspace {
     Write-Host "`n  Re-deploying configs..." -ForegroundColor Cyan
     & "$repo\scripts\sync-from-repo.ps1"
 
-    # 3. Re-patch Claude Code Vietnamese IME fix (idempotent — skips if already patched)
+    # 3. Re-patch Claude Code Vietnamese IME fix (idempotent, graceful no-op when not applicable)
     Write-Host "`n  Checking Claude Code Vietnamese fix..." -ForegroundColor Cyan
-    try {
-        & "$repo\scripts\fix-claude-vn.ps1"
-    } catch {
-        Write-Host "  Vietnamese fix skipped: $_" -ForegroundColor Yellow
+    & "$repo\scripts\fix-claude-vn.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Fix script returned non-zero — check output above." -ForegroundColor Yellow
     }
 
     # 4. Reload profile (sync-from-repo.ps1 already cleared init cache)
